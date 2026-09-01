@@ -3,6 +3,7 @@
 #include <QDir>
 #include <QFileInfo>
 #include <QImageReader>
+#include <QImageWriter>
 #include <QLoggingCategory>
 #include <QRegularExpression>
 #include <QScopedPointer>
@@ -28,11 +29,14 @@ struct PackOptions {
     int maxSize = 8192;
     float scale = 1.0f;
     QString dataFormat = "cocos2d";
+    ImageFormat imageFormat = kPNG;
     PixelFormat pixelFormat = kARGB8888;
     bool premultiplied = true;
     bool trimSpriteNames = false;
     bool prependSmartFolderName = false;
     int pngCompression = 9;
+    int webpQuality = 80;
+    int jpgQuality = 80;
     bool pngQuant = false;
     QString pngQuantQuality = "80-95";
 };
@@ -97,6 +101,35 @@ QString normalizedMode(const QString& value)
     return {};
 }
 
+QString textureFormatName(ImageFormat format)
+{
+    switch (format) {
+        case kWEBP: return "webp";
+        case kJPG: return "jpg";
+        default: return "png";
+    }
+}
+
+ImageFormat textureFormatFromName(const QString& value)
+{
+    if (value.compare("png", Qt::CaseInsensitive) == 0) return kPNG;
+    if (value.compare("webp", Qt::CaseInsensitive) == 0) return kWEBP;
+    if (value.compare("jpg", Qt::CaseInsensitive) == 0
+        || value.compare("jpeg", Qt::CaseInsensitive) == 0) {
+        return kJPG;
+    }
+    return static_cast<ImageFormat>(-1);
+}
+
+QByteArray textureWriterFormat(ImageFormat format)
+{
+    switch (format) {
+        case kWEBP: return "webp";
+        case kJPG: return "jpeg";
+        default: return "png";
+    }
+}
+
 PackOptions optionsFromProject(const SpritePackerProjectFile& project)
 {
     PackOptions options;
@@ -109,6 +142,7 @@ PackOptions optionsFromProject(const SpritePackerProjectFile& project)
     options.heuristicMask = project.heuristicMask();
     options.rotateSprites = project.rotateSprites();
     options.dataFormat = project.dataFormat().isEmpty() ? "cocos2d" : project.dataFormat().toLower();
+    options.imageFormat = project.imageFormat();
     options.pixelFormat = project.pixelFormat();
     options.premultiplied = project.premultiplied();
     options.trimSpriteNames = project.trimSpriteNames();
@@ -116,6 +150,8 @@ PackOptions optionsFromProject(const SpritePackerProjectFile& project)
     options.pngQuant = project.pngOptMode().compare("Lossy", Qt::CaseInsensitive) == 0
                     || project.pngOptMode().compare("PngQuant", Qt::CaseInsensitive) == 0;
     options.pngQuantQuality = project.pngQuantQuality();
+    options.webpQuality = project.webpQuality();
+    options.jpgQuality = project.jpgQuality();
     return options;
 }
 
@@ -166,6 +202,8 @@ bool applyOverrides(const QCommandLineParser& parser, PackOptions* options, QStr
         || !parseInteger(parser, "sprite-border", 0, 4096, &options->spriteBorder, error)
         || !parseInteger(parser, "max-size", 1, 65536, &options->maxSize, error)
         || !parseInteger(parser, "png-compression", 0, 9, &options->pngCompression, error)
+        || !parseInteger(parser, "webp-quality", 0, 100, &options->webpQuality, error)
+        || !parseInteger(parser, "jpg-quality", 0, 100, &options->jpgQuality, error)
         || !parseFloat(parser, "epsilon", 0.0f, &options->epsilon, error)
         || !parseFloat(parser, "scale", 0.0f, &options->scale, error)) {
         return false;
@@ -178,6 +216,21 @@ bool applyOverrides(const QCommandLineParser& parser, PackOptions* options, QStr
     if (parser.isSet("trim-sprite-names")) options->trimSpriteNames = true;
     if (parser.isSet("prepend-smart-folder-name")) options->prependSmartFolderName = true;
     if (parser.isSet("no-premultiplied")) options->premultiplied = false;
+    if (parser.isSet("texture-format")) {
+        options->imageFormat = textureFormatFromName(parser.value("texture-format"));
+    }
+    if (options->imageFormat != kPNG
+        && options->imageFormat != kWEBP
+        && options->imageFormat != kJPG) {
+        *error = "Texture format must be png, webp, or jpg.";
+        return false;
+    }
+    const QByteArray requiredWriter = textureWriterFormat(options->imageFormat);
+    if (!QImageWriter::supportedImageFormats().contains(requiredWriter)) {
+        *error = QString("Qt image writer '%1' is unavailable. Install the corresponding Qt image plugin.")
+            .arg(QString::fromLatin1(requiredWriter));
+        return false;
+    }
     if (parser.isSet("pngquant") && parser.isSet("no-pngquant")) {
         *error = "--pngquant and --no-pngquant cannot be used together.";
         return false;
@@ -290,7 +343,7 @@ int commandLine(QCoreApplication& app)
 {
     QCommandLineParser parser;
     parser.setApplicationDescription(
-        "Pack images into PNG sprite sheets and export matching metadata without a GUI.");
+        "Pack images into PNG, WebP, or JPEG sprite sheets and export matching metadata without a GUI.");
     parser.addHelpOption();
     parser.addVersionOption();
     parser.addPositionalArgument("source", "Image/directory to pack, or an .ssp/.json/.tps project file.");
@@ -311,17 +364,21 @@ int commandLine(QCoreApplication& app)
         {"rotate", "Allow 90-degree sprite rotation."},
         {"max-size", "Maximum width and height of a sheet.", "pixels", "8192"},
         {"scale", "Scale source images before packing.", "factor", "1"},
-        {"pixel-format", "PNG pixel format: ARGB8888, ARGB8565, ARGB4444, RGB888, RGB565, or ALPHA.", "format", "ARGB8888"},
+        {"pixel-format", "Texture pixel format: ARGB8888, ARGB8565, ARGB4444, RGB888, RGB565, or ALPHA.", "format", "ARGB8888"},
+        {"texture-format", "Texture format: png, webp, or jpg.", "format", "png"},
         {"no-premultiplied", "Disable the project premultiplied-alpha setting."},
         {{"trim-sprite-names", "trimSpriteNames"}, "Remove image extensions from sprite names."},
         {{"prepend-smart-folder-name", "prependSmartFolderName"}, "Keep the top-level source folder in sprite names."},
         {"png-compression", "PNG compression level from 0 to 9.", "level", "9"},
+        {"webp-quality", "WebP quality from 0 to 100.", "quality", "80"},
+        {"jpg-quality", "JPEG quality from 0 to 100.", "quality", "80"},
         {"pngquant", "Optionally reduce PNG size with the external pngquant executable."},
         {"no-pngquant", "Disable pngquant requested by a project file."},
         {"pngquant-quality", "pngquant quality range in min-max form; also enables pngquant.", "range", "80-95"},
         {"verbose", "Show packing diagnostics."},
         {"list-formats", "List supported metadata formats and exit."},
-        {"list-image-formats", "List currently available input image formats and exit."}
+        {"list-image-formats", "List currently available input image formats and exit."},
+        {"list-texture-formats", "List currently available texture output formats and exit."}
     });
 
     parser.process(app);
@@ -344,6 +401,15 @@ int commandLine(QCoreApplication& app)
         qInfo().noquote() << formats.join('\n');
         return 0;
     }
+    if (parser.isSet("list-texture-formats")) {
+        const QList<QByteArray> writers = QImageWriter::supportedImageFormats();
+        QStringList formats;
+        if (writers.contains("png")) formats.append("png");
+        if (writers.contains("webp")) formats.append("webp");
+        if (writers.contains("jpeg") || writers.contains("jpg")) formats.append("jpg");
+        qInfo().noquote() << formats.join('\n');
+        return 0;
+    }
     const QStringList positional = parser.positionalArguments();
     if (positional.isEmpty() || positional.size() > 2) {
         parser.showHelp(2);
@@ -360,10 +426,6 @@ int commandLine(QCoreApplication& app)
         printError(QString("Cannot read project file '%1'.").arg(source.filePath()));
         return 1;
     }
-    if (project && project->imageFormat() != kPNG) {
-        qWarning().noquote() << "warning: project texture format is ignored; this CLI always writes PNG.";
-    }
-
     PackOptions options = project ? optionsFromProject(*project) : PackOptions();
     QString error;
     if (!applyOverrides(parser, &options, &error)) {
@@ -382,11 +444,14 @@ int commandLine(QCoreApplication& app)
     }
 
     PublishSpriteSheet publisher;
+    publisher.setImageFormat(options.imageFormat);
     publisher.setPixelFormat(options.pixelFormat);
     publisher.setPremultiplied(options.premultiplied);
     publisher.setTrimSpriteNames(options.trimSpriteNames);
     publisher.setPrependSmartFolderName(options.prependSmartFolderName);
     publisher.setPngCompression(options.pngCompression);
+    publisher.setWebpQuality(options.webpQuality);
+    publisher.setJpgQuality(options.jpgQuality);
     publisher.setPngQuant(options.pngQuant, options.pngQuantQuality);
 
     if (project) {
@@ -436,6 +501,7 @@ int commandLine(QCoreApplication& app)
         return 1;
     }
 
-    qInfo().noquote() << "Published PNG sprite sheet(s) to" << destination.absolutePath();
+    qInfo().noquote() << "Published" << textureFormatName(options.imageFormat).toUpper()
+                      << "sprite sheet(s) to" << destination.absolutePath();
     return 0;
 }

@@ -62,6 +62,89 @@ if(NOT result EQUAL 0 OR NOT EXISTS "${OUTPUT}/pngquant-missing.png")
         "Missing pngquant must not fail publishing (${result}):\n${stdout}\n${stderr}")
 endif()
 
+execute_process(
+    COMMAND "${CLI}" --list-texture-formats
+    RESULT_VARIABLE result
+    OUTPUT_VARIABLE stdout
+    ERROR_VARIABLE stderr
+)
+set(texture_formats "${stdout}\n${stderr}")
+string(REPLACE "\r" "" texture_formats "${texture_formats}")
+string(REPLACE "\n" ";" texture_format_list "${texture_formats}")
+list(FILTER texture_format_list EXCLUDE REGEX "^$")
+if(NOT result EQUAL 0 OR NOT "png" IN_LIST texture_format_list)
+    message(FATAL_ERROR "PNG texture writer was not reported (${result}):\n${stderr}")
+endif()
+
+if("webp" IN_LIST texture_format_list)
+    execute_process(
+        COMMAND "${CLI}" "${INPUT}" "${OUTPUT}"
+            --format pixijs
+            --output-name webp-sheet
+            --texture-format webp
+            --webp-quality 80
+        RESULT_VARIABLE result
+        OUTPUT_VARIABLE stdout
+        ERROR_VARIABLE stderr
+    )
+    if(NOT result EQUAL 0
+       OR NOT EXISTS "${OUTPUT}/webp-sheet.webp"
+       OR NOT EXISTS "${OUTPUT}/webp-sheet.json")
+        message(FATAL_ERROR "WebP smoke test failed (${result}):\n${stdout}\n${stderr}")
+    endif()
+    file(READ "${OUTPUT}/webp-sheet.webp" webp_signature LIMIT 12 HEX)
+    if(NOT webp_signature MATCHES "^52494646........57454250$")
+        message(FATAL_ERROR "WebP smoke-test texture has an invalid signature")
+    endif()
+    file(READ "${OUTPUT}/webp-sheet.json" webp_json)
+    string(JSON webp_image GET "${webp_json}" meta image)
+    if(NOT webp_image STREQUAL "webp-sheet.webp")
+        message(FATAL_ERROR "WebP metadata contains the wrong texture file name")
+    endif()
+endif()
+
+if(NOT "jpg" IN_LIST texture_format_list)
+    message(FATAL_ERROR "JPEG texture writer was not reported")
+endif()
+execute_process(
+    COMMAND "${CLI}" "${INPUT}" "${OUTPUT}"
+        --format pixijs
+        --output-name jpg-sheet
+        --texture-format jpg
+        --jpg-quality 80
+        --pixel-format RGB888
+    RESULT_VARIABLE result
+    OUTPUT_VARIABLE stdout
+    ERROR_VARIABLE stderr
+)
+if(NOT result EQUAL 0
+   OR NOT EXISTS "${OUTPUT}/jpg-sheet.jpg"
+   OR NOT EXISTS "${OUTPUT}/jpg-sheet.json")
+    message(FATAL_ERROR "JPEG smoke test failed (${result}):\n${stdout}\n${stderr}")
+endif()
+file(READ "${OUTPUT}/jpg-sheet.jpg" jpg_signature LIMIT 2 HEX)
+if(NOT jpg_signature STREQUAL "ffd8")
+    message(FATAL_ERROR "JPEG smoke-test texture has an invalid signature")
+endif()
+file(READ "${OUTPUT}/jpg-sheet.json" jpg_json)
+string(JSON jpg_image GET "${jpg_json}" meta image)
+if(NOT jpg_image STREQUAL "jpg-sheet.jpg")
+    message(FATAL_ERROR "JPEG metadata contains the wrong texture file name")
+endif()
+
+execute_process(
+    COMMAND "${CLI}" "${INPUT}" "${OUTPUT}"
+        --format none
+        --output-name jpg-alpha
+        --texture-format jpg
+    RESULT_VARIABLE result
+    OUTPUT_VARIABLE stdout
+    ERROR_VARIABLE stderr
+)
+if(result EQUAL 0 OR NOT stderr MATCHES "sprite pixels contain transparency")
+    message(FATAL_ERROR "JPEG transparency validation did not reject an Alpha texture")
+endif()
+
 file(READ "${OUTPUT}/smoke.json" json_contents)
 string(JSON frame_count LENGTH "${json_contents}")
 if(NOT frame_count EQUAL 1)
@@ -131,10 +214,16 @@ endif()
 file(TO_CMAKE_PATH "${INPUT}" project_input)
 file(TO_CMAKE_PATH "${OUTPUT}/nested" project_nested_input)
 file(TO_CMAKE_PATH "${OUTPUT}/project-output" project_output)
+set(project_texture_format "*.png")
+set(project_texture_extension "png")
+if("webp" IN_LIST texture_format_list)
+    set(project_texture_format "*.webp")
+    set(project_texture_extension "webp")
+endif()
 file(WRITE "${OUTPUT}/smoke.ssp" "{
   \"trimMode\": \"Rect\",
   \"algorithm\": \"Rect\",
-  \"imageFormat\": \"*.png\",
+  \"imageFormat\": \"${project_texture_format}\",
   \"pixelFormat\": \"ARGB8888\",
   \"pngOptMode\": \"Lossy\",
   \"pngQuantQuality\": \"80-95\",
@@ -158,7 +247,7 @@ execute_process(
     ERROR_VARIABLE stderr
 )
 if(NOT result EQUAL 0
-   OR NOT EXISTS "${OUTPUT}/project-output/@1x-project.png"
+   OR NOT EXISTS "${OUTPUT}/project-output/@1x-project.${project_texture_extension}"
    OR NOT EXISTS "${OUTPUT}/project-output/@1x-project.json")
     message(FATAL_ERROR "Project smoke test failed (${result}):\n${stdout}\n${stderr}")
 endif()
@@ -167,4 +256,8 @@ file(READ "${OUTPUT}/project-output/@1x-project.json" project_json)
 string(JSON project_frame_count LENGTH "${project_json}" frames)
 if(NOT project_frame_count EQUAL 2)
     message(FATAL_ERROR "Project srcList did not accept its mixed file/directory inputs")
+endif()
+string(JSON project_image GET "${project_json}" meta image)
+if(NOT project_image STREQUAL "@1x-project.${project_texture_extension}")
+    message(FATAL_ERROR "Project imageFormat was not used by the texture writer")
 endif()

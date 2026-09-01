@@ -12,6 +12,42 @@
 
 namespace {
 
+QString imageExtension(ImageFormat format)
+{
+    switch (format) {
+        case kWEBP: return ".webp";
+        case kJPG: return ".jpg";
+        default: return ".png";
+    }
+}
+
+QByteArray writerFormat(ImageFormat format)
+{
+    switch (format) {
+        case kWEBP: return "webp";
+        case kJPG: return "jpeg";
+        default: return "png";
+    }
+}
+
+bool framesContainTransparency(const QImage& image,
+                               const QMap<QString, SpriteFrameInfo>& frames)
+{
+    if (!image.hasAlphaChannel()) return false;
+
+    const QImage argb = image.convertToFormat(QImage::Format_ARGB32);
+    for (const SpriteFrameInfo& frame : frames) {
+        const QRect bounds = frame.frame.intersected(argb.rect());
+        for (int y = bounds.top(); y <= bounds.bottom(); ++y) {
+            const QRgb* pixels = reinterpret_cast<const QRgb*>(argb.constScanLine(y));
+            for (int x = bounds.left(); x <= bounds.right(); ++x) {
+                if (qAlpha(pixels[x]) != 255) return true;
+            }
+        }
+    }
+    return false;
+}
+
 bool replaceWithFile(const QString& destinationPath, const QString& sourcePath)
 {
     QFile source(sourcePath);
@@ -78,11 +114,14 @@ void optimizeWithPngQuant(const QString& imageFilePath, const QString& quality)
 } // namespace
 
 PublishSpriteSheet::PublishSpriteSheet()
-    : _pixelFormat(kARGB8888)
+    : _imageFormat(kPNG)
+    , _pixelFormat(kARGB8888)
     , _premultiplied(true)
     , _trimSpriteNames(true)
     , _prependSmartFolderName(true)
     , _pngCompression(9)
+    , _webpQuality(80)
+    , _jpgQuality(80)
     , _pngQuantEnabled(false)
     , _pngQuantQuality("80-95")
 {
@@ -116,7 +155,20 @@ bool PublishSpriteSheet::publish(const QString& format, QString* errorMessage)
                 outputFilePath += "_" + QString::number(page);
             }
 
-            const QString imageFilePath = outputFilePath + ".png";
+            const QString imageFilePath = outputFilePath + imageExtension(_imageFormat);
+            QImage image = convertImage(output._atlasImage, _pixelFormat, _premultiplied);
+            if (_imageFormat == kJPG) {
+                if (framesContainTransparency(image, output._spriteFrames)) {
+                    if (errorMessage) {
+                        *errorMessage = QString(
+                            "Cannot write JPEG '%1': sprite pixels contain transparency; use PNG or WebP.")
+                            .arg(imageFilePath);
+                    }
+                    return false;
+                }
+                image = image.convertToFormat(QImage::Format_RGB888);
+            }
+
             if (!format.isEmpty() && format != "none") {
                 DataExportResult exportResult;
                 if (!DataExporter::exportData(format,
@@ -147,20 +199,25 @@ bool PublishSpriteSheet::publish(const QString& format, QString* errorMessage)
                 }
             }
 
-            QImageWriter writer(imageFilePath, "png");
+            QImageWriter writer(imageFilePath, writerFormat(_imageFormat));
             writer.setOptimizedWrite(true);
-            // Qt's PNG handler expects a 0..100 compression ratio, while the
-            // CLI exposes the familiar PNG/zlib levels 0..9.
-            writer.setCompression((_pngCompression * 100 + 4) / 9);
-            const QImage image = convertImage(output._atlasImage, _pixelFormat, _premultiplied);
+            if (_imageFormat == kPNG) {
+                // Qt's PNG handler expects a 0..100 compression ratio, while
+                // the CLI exposes the familiar PNG/zlib levels 0..9.
+                writer.setCompression((_pngCompression * 100 + 4) / 9);
+            } else if (_imageFormat == kWEBP) {
+                writer.setQuality(_webpQuality);
+            } else if (_imageFormat == kJPG) {
+                writer.setQuality(_jpgQuality);
+            }
             if (!writer.write(image)) {
                 if (errorMessage) {
-                    *errorMessage = QString("Cannot write PNG '%1': %2")
+                    *errorMessage = QString("Cannot write texture '%1': %2")
                         .arg(imageFilePath, writer.errorString());
                 }
                 return false;
             }
-            if (_pngQuantEnabled) {
+            if (_imageFormat == kPNG && _pngQuantEnabled) {
                 optimizeWithPngQuant(imageFilePath, _pngQuantQuality);
             }
         }

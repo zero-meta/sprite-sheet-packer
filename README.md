@@ -9,7 +9,7 @@ are not part of the build.
 - Rectangular and polygon packing
 - Trimming, scaling, rotation, borders, power-of-two and square sheets
 - Multiple sheets and project scaling variants
-- PNG texture output
+- PNG, WebP, and JPEG texture output
 - Cocos2d plist, Corona/Solar2D, generic JSON, PixiJS, Phaser, and Godot metadata
 - `.ssp`, JSON project, and TexturePacker `.tps` input
 
@@ -24,7 +24,7 @@ brew install qtbase cmake ninja
 ```
 
 `qtimageformats` is optional. Install it when additional input image formats
-such as WebP or TIFF are needed:
+such as WebP or TIFF, or WebP texture output, are needed:
 
 ```sh
 brew install qtimageformats
@@ -66,7 +66,21 @@ build/sprite-sheet-packer path/to/project.ssp path/to/output
 Run `sprite-sheet-packer --help` for all packing options, or
 `sprite-sheet-packer --list-formats` for the built-in metadata formats.
 `sprite-sheet-packer --list-image-formats` reports the input formats currently
-provided by Qt and installed image plugins.
+provided by Qt and installed image plugins. `--list-texture-formats` reports
+the available texture writers.
+
+Select WebP or JPEG output and quality with:
+
+```sh
+build/sprite-sheet-packer path/to/sprites path/to/output \
+  --texture-format webp --webp-quality 80
+```
+
+WebP preserves transparency. JPEG is accepted only when packed sprite pixels
+are opaque; use PNG or WebP for transparent sprites. Passing
+`--pixel-format RGB888` explicitly discards Alpha and permits JPEG output. The
+project fields `imageFormat`, `webpQuality`, and `jpgQuality` provide the same
+settings. Ensure the target runtime can decode the chosen texture format.
 
 Use pngquant as an optional lossy post-process when a smaller distribution
 file is more important than exact source pixels:
@@ -93,9 +107,9 @@ The two Corona/Solar2D formats produce the same compact JSON structure but use
 different frame names: `corona` keeps only the sprite file name, while
 `corona2` keeps `direct-parent/file-name` and removes extensions.
 
-Only PNG texture output is currently supported. Legacy embedded
-optipng/libimagequant code and PVRTexTool-based PVR/PKM output are intentionally
-excluded; pngquant support invokes the external executable when requested.
+Legacy embedded optipng/libimagequant code and PVRTexTool-based PVR/PKM output
+are intentionally excluded; pngquant support invokes the external executable
+for PNG output when requested.
 
 ## License
 
