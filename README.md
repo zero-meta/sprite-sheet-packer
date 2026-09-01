@@ -68,12 +68,34 @@ Run `sprite-sheet-packer --help` for all packing options, or
 `sprite-sheet-packer --list-image-formats` reports the input formats currently
 provided by Qt and installed image plugins.
 
+Use pngquant as an optional lossy post-process when a smaller distribution
+file is more important than exact source pixels:
+
+```sh
+build/sprite-sheet-packer path/to/sprites path/to/output \
+  --pngquant --pngquant-quality 80-95
+```
+
+If `pngquant` is not installed, cannot process the image, or produces a larger
+file, the original lossless PNG is kept and publishing still succeeds. A
+project can enable the same behavior with `"pngOptMode": "Lossy"` and can set
+`"pngQuantQuality": "80-95"`. Use `--no-pngquant` to override that project
+setting.
+
+Project `srcList` entries may independently be image files or directories,
+and relative entries are resolved from the project file's directory.
+Directories are searched recursively, so one project may mix folders and
+individual files from different locations. Directory entries preserve paths
+relative to the directory's parent; individually listed files use only their
+base file names. Avoid duplicate final frame names.
+
 The two Corona/Solar2D formats produce the same compact JSON structure but use
 different frame names: `corona` keeps only the sprite file name, while
 `corona2` keeps `direct-parent/file-name` and removes extensions.
 
-Only PNG texture output is currently supported. Legacy optipng/pngquant
-optimization and PVRTexTool-based PVR/PKM output are intentionally excluded.
+Only PNG texture output is currently supported. Legacy embedded
+optipng/libimagequant code and PVRTexTool-based PVR/PKM output are intentionally
+excluded; pngquant support invokes the external executable when requested.
 
 ## License
 

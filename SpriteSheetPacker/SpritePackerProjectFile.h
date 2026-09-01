@@ -57,6 +57,9 @@ public:
     void setPngOptLevel(int optLevel) { _pngOptLevel = optLevel; }
     int pngOptLevel() const { return _pngOptLevel; }
 
+    void setPngQuantQuality(const QString& quality) { _pngQuantQuality = quality; }
+    const QString& pngQuantQuality() const { return _pngQuantQuality; }
+
     void setWebpQuality(int quality) { _webpQuality = quality; }
     int webpQuality() const { return _webpQuality; }
 
@@ -105,6 +108,7 @@ protected:
 
     QString     _pngOptMode;
     int         _pngOptLevel;
+    QString     _pngQuantQuality;
     int         _webpQuality;
     int         _jpgQuality;
 

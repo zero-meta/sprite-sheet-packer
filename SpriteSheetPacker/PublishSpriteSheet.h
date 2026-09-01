@@ -19,6 +19,11 @@ public:
     void setTrimSpriteNames(bool value) { _trimSpriteNames = value; }
     void setPrependSmartFolderName(bool value) { _prependSmartFolderName = value; }
     void setPngCompression(int value) { _pngCompression = value; }
+    void setPngQuant(bool enabled, const QString& quality)
+    {
+        _pngQuantEnabled = enabled;
+        _pngQuantQuality = quality;
+    }
 
     bool publish(const QString& format, QString* errorMessage = nullptr);
 
@@ -30,6 +35,8 @@ private:
     bool _trimSpriteNames;
     bool _prependSmartFolderName;
     int _pngCompression;
+    bool _pngQuantEnabled;
+    QString _pngQuantQuality;
 };
 
 #endif

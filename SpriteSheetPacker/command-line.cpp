@@ -4,6 +4,7 @@
 #include <QFileInfo>
 #include <QImageReader>
 #include <QLoggingCategory>
+#include <QRegularExpression>
 #include <QScopedPointer>
 
 #include "DataExporter.h"
@@ -32,6 +33,8 @@ struct PackOptions {
     bool trimSpriteNames = false;
     bool prependSmartFolderName = false;
     int pngCompression = 9;
+    bool pngQuant = false;
+    QString pngQuantQuality = "80-95";
 };
 
 void printError(const QString& message)
@@ -110,7 +113,28 @@ PackOptions optionsFromProject(const SpritePackerProjectFile& project)
     options.premultiplied = project.premultiplied();
     options.trimSpriteNames = project.trimSpriteNames();
     options.prependSmartFolderName = project.prependSmartFolderName();
+    options.pngQuant = project.pngOptMode().compare("Lossy", Qt::CaseInsensitive) == 0
+                    || project.pngOptMode().compare("PngQuant", Qt::CaseInsensitive) == 0;
+    options.pngQuantQuality = project.pngQuantQuality();
     return options;
+}
+
+bool normalizePngQuantQuality(const QString& value, QString* normalized, QString* error)
+{
+    static const QRegularExpression pattern("^(\\d{1,3})-(\\d{1,3})$");
+    const QRegularExpressionMatch match = pattern.match(value.trimmed());
+    if (!match.hasMatch()) {
+        *error = "--pngquant-quality must use min-max syntax, for example 80-95.";
+        return false;
+    }
+    const int minimum = match.captured(1).toInt();
+    const int maximum = match.captured(2).toInt();
+    if (minimum < 0 || maximum > 100 || minimum > maximum) {
+        *error = "--pngquant-quality values must satisfy 0 <= min <= max <= 100.";
+        return false;
+    }
+    *normalized = QString::number(minimum) + "-" + QString::number(maximum);
+    return true;
 }
 
 bool applyOverrides(const QCommandLineParser& parser, PackOptions* options, QString* error)
@@ -154,6 +178,30 @@ bool applyOverrides(const QCommandLineParser& parser, PackOptions* options, QStr
     if (parser.isSet("trim-sprite-names")) options->trimSpriteNames = true;
     if (parser.isSet("prepend-smart-folder-name")) options->prependSmartFolderName = true;
     if (parser.isSet("no-premultiplied")) options->premultiplied = false;
+    if (parser.isSet("pngquant") && parser.isSet("no-pngquant")) {
+        *error = "--pngquant and --no-pngquant cannot be used together.";
+        return false;
+    }
+    if (parser.isSet("pngquant")) options->pngQuant = true;
+    if (parser.isSet("no-pngquant")) options->pngQuant = false;
+    if (parser.isSet("pngquant-quality")) {
+        if (parser.isSet("no-pngquant")) {
+            *error = "--pngquant-quality cannot be combined with --no-pngquant.";
+            return false;
+        }
+        if (!normalizePngQuantQuality(parser.value("pngquant-quality"),
+                                     &options->pngQuantQuality,
+                                     error)) {
+            return false;
+        }
+        options->pngQuant = true;
+    } else if (options->pngQuant
+               && !normalizePngQuantQuality(options->pngQuantQuality,
+                                             &options->pngQuantQuality,
+                                             error)) {
+        *error = "Project pngQuantQuality must use min-max values from 0 to 100.";
+        return false;
+    }
 
     if (parser.isSet("format")) options->dataFormat = parser.value("format").toLower();
     QStringList formats = DataExporter::supportedFormats();
@@ -268,6 +316,9 @@ int commandLine(QCoreApplication& app)
         {{"trim-sprite-names", "trimSpriteNames"}, "Remove image extensions from sprite names."},
         {{"prepend-smart-folder-name", "prependSmartFolderName"}, "Keep the top-level source folder in sprite names."},
         {"png-compression", "PNG compression level from 0 to 9.", "level", "9"},
+        {"pngquant", "Optionally reduce PNG size with the external pngquant executable."},
+        {"no-pngquant", "Disable pngquant requested by a project file."},
+        {"pngquant-quality", "pngquant quality range in min-max form; also enables pngquant.", "range", "80-95"},
         {"verbose", "Show packing diagnostics."},
         {"list-formats", "List supported metadata formats and exit."},
         {"list-image-formats", "List currently available input image formats and exit."}
@@ -336,6 +387,7 @@ int commandLine(QCoreApplication& app)
     publisher.setTrimSpriteNames(options.trimSpriteNames);
     publisher.setPrependSmartFolderName(options.prependSmartFolderName);
     publisher.setPngCompression(options.pngCompression);
+    publisher.setPngQuant(options.pngQuant, options.pngQuantQuality);
 
     if (project) {
         QVector<ScalingVariant> variants = project->scalingVariants();

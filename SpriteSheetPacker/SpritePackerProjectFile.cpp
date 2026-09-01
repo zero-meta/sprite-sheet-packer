@@ -17,6 +17,7 @@ SpritePackerProjectFile::SpritePackerProjectFile() {
     _premultiplied = true;
     _pngOptMode = "None";
     _pngOptLevel = 7;
+    _pngQuantQuality = "80-95";
     _jpgQuality = 80;
     _webpQuality = 80;
 
@@ -56,6 +57,7 @@ bool SpritePackerProjectFile::read(const QString &fileName) {
     if (json.contains("premultiplied")) _premultiplied = json["premultiplied"].toBool();
     if (json.contains("pngOptMode")) _pngOptMode = json["pngOptMode"].toString();
     if (json.contains("pngOptLevel")) _pngOptLevel = json["pngOptLevel"].toInt();
+    if (json.contains("pngQuantQuality")) _pngQuantQuality = json["pngQuantQuality"].toString();
     if (json.contains("webpQuality")) _webpQuality = json["webpQuality"].toInt();
     if (json.contains("jpgQuality")) _jpgQuality = json["jpgQuality"].toInt();
 
@@ -108,6 +110,7 @@ bool SpritePackerProjectFile::write(const QString &fileName) {
     json["premultiplied"] = _premultiplied;
     json["pngOptMode"] = _pngOptMode;
     json["pngOptLevel"] = _pngOptLevel;
+    json["pngQuantQuality"] = _pngQuantQuality;
     json["webpQuality"] = _webpQuality;
     json["jpgQuality"] = _jpgQuality;
 

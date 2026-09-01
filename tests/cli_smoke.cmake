@@ -26,6 +26,42 @@ if(NOT png_signature STREQUAL "89504e470d0a1a0a")
     message(FATAL_ERROR "Smoke-test texture is not a PNG")
 endif()
 
+execute_process(
+    COMMAND "${CLI}" "${INPUT}" "${OUTPUT}"
+        --format none
+        --output-name uncompressed
+        --png-compression 0
+    RESULT_VARIABLE result
+    OUTPUT_VARIABLE stdout
+    ERROR_VARIABLE stderr
+)
+if(NOT result EQUAL 0 OR NOT EXISTS "${OUTPUT}/uncompressed.png")
+    message(FATAL_ERROR "Uncompressed PNG smoke test failed (${result}):\n${stdout}\n${stderr}")
+endif()
+
+file(SIZE "${OUTPUT}/smoke.png" compressed_png_size)
+file(SIZE "${OUTPUT}/uncompressed.png" uncompressed_png_size)
+if(NOT compressed_png_size LESS uncompressed_png_size)
+    message(FATAL_ERROR
+        "PNG compression is ineffective: level 9 produced ${compressed_png_size} bytes, "
+        "level 0 produced ${uncompressed_png_size} bytes")
+endif()
+
+execute_process(
+    COMMAND "${CMAKE_COMMAND}" -E env "PATH="
+        "${CLI}" "${INPUT}" "${OUTPUT}"
+        --format none
+        --output-name pngquant-missing
+        --pngquant
+    RESULT_VARIABLE result
+    OUTPUT_VARIABLE stdout
+    ERROR_VARIABLE stderr
+)
+if(NOT result EQUAL 0 OR NOT EXISTS "${OUTPUT}/pngquant-missing.png")
+    message(FATAL_ERROR
+        "Missing pngquant must not fail publishing (${result}):\n${stdout}\n${stderr}")
+endif()
+
 file(READ "${OUTPUT}/smoke.json" json_contents)
 string(JSON frame_count LENGTH "${json_contents}")
 if(NOT frame_count EQUAL 1)
@@ -93,16 +129,19 @@ if(NOT corona2_index EQUAL 1)
 endif()
 
 file(TO_CMAKE_PATH "${INPUT}" project_input)
+file(TO_CMAKE_PATH "${OUTPUT}/nested" project_nested_input)
 file(TO_CMAKE_PATH "${OUTPUT}/project-output" project_output)
 file(WRITE "${OUTPUT}/smoke.ssp" "{
   \"trimMode\": \"Rect\",
   \"algorithm\": \"Rect\",
   \"imageFormat\": \"*.png\",
   \"pixelFormat\": \"ARGB8888\",
+  \"pngOptMode\": \"Lossy\",
+  \"pngQuantQuality\": \"80-95\",
   \"dataFormat\": \"pixijs\",
   \"destPath\": \"${project_output}\",
   \"spriteSheetName\": \"{v}project\",
-  \"srcList\": [\"${project_input}\"],
+  \"srcList\": [\"${project_input}\", \"${project_nested_input}\"],
   \"scalingVariants\": [{
     \"name\": \"@1x-\",
     \"scale\": 1,
@@ -122,4 +161,10 @@ if(NOT result EQUAL 0
    OR NOT EXISTS "${OUTPUT}/project-output/@1x-project.png"
    OR NOT EXISTS "${OUTPUT}/project-output/@1x-project.json")
     message(FATAL_ERROR "Project smoke test failed (${result}):\n${stdout}\n${stderr}")
+endif()
+
+file(READ "${OUTPUT}/project-output/@1x-project.json" project_json)
+string(JSON project_frame_count LENGTH "${project_json}" frames)
+if(NOT project_frame_count EQUAL 2)
+    message(FATAL_ERROR "Project srcList did not accept its mixed file/directory inputs")
 endif()
