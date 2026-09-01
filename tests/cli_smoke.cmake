@@ -64,6 +64,34 @@ if(NOT result EQUAL 0 OR NOT EXISTS "${OUTPUT}/polygon.png")
     message(FATAL_ERROR "Polygon smoke test failed (${result}):\n${stdout}\n${stderr}")
 endif()
 
+file(MAKE_DIRECTORY "${OUTPUT}/nested/anim")
+file(COPY_FILE "${INPUT}" "${OUTPUT}/nested/anim/walk.png")
+foreach(corona_format IN ITEMS corona corona2)
+    execute_process(
+        COMMAND "${CLI}" "${OUTPUT}/nested" "${OUTPUT}"
+            --format "${corona_format}"
+            --output-name "${corona_format}"
+        RESULT_VARIABLE result
+        OUTPUT_VARIABLE stdout
+        ERROR_VARIABLE stderr
+    )
+    if(NOT result EQUAL 0 OR NOT EXISTS "${OUTPUT}/${corona_format}.json")
+        message(FATAL_ERROR "${corona_format} smoke test failed (${result}):\n${stdout}\n${stderr}")
+    endif()
+endforeach()
+
+file(READ "${OUTPUT}/corona.json" corona_json)
+string(JSON corona_index GET "${corona_json}" frameIndex "walk.png")
+if(NOT corona_index EQUAL 1)
+    message(FATAL_ERROR "corona frameIndex did not use the sprite file name")
+endif()
+
+file(READ "${OUTPUT}/corona2.json" corona2_json)
+string(JSON corona2_index GET "${corona2_json}" frameIndex "anim/walk")
+if(NOT corona2_index EQUAL 1)
+    message(FATAL_ERROR "corona2 frameIndex did not preserve the direct parent folder")
+endif()
+
 file(TO_CMAKE_PATH "${INPUT}" project_input)
 file(TO_CMAKE_PATH "${OUTPUT}/project-output" project_output)
 file(WRITE "${OUTPUT}/smoke.ssp" "{

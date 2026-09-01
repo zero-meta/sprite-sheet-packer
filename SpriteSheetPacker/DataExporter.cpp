@@ -7,6 +7,7 @@
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QRegularExpression>
 #include <QTextStream>
 #include <QVariantList>
 #include <QVariantMap>
@@ -61,6 +62,72 @@ QJsonObject sizeJson(const QSize& size, bool shortNames = false)
 QByteArray indentedJson(const QJsonObject& object)
 {
     return QJsonDocument(object).toJson(QJsonDocument::Indented);
+}
+
+QString coronaFileName(const QString& filePath)
+{
+    return QDir::fromNativeSeparators(filePath).section('/', -1);
+}
+
+QString coronaFileNameWithoutExtension(const QString& filePath)
+{
+    QString fileName = coronaFileName(filePath);
+    fileName.remove(QRegularExpression("\\.[^.]+$"));
+    return fileName;
+}
+
+QString coronaFileDirectory(const QString& filePath)
+{
+    const QString normalized = QDir::fromNativeSeparators(filePath);
+    const QString fileName = coronaFileName(normalized);
+    const qsizetype length = qMax<qsizetype>(0, normalized.size() - fileName.size() - 1);
+    return normalized.left(length);
+}
+
+QString coronaFrameName(const QString& key, bool keepParentFolder)
+{
+    if (!keepParentFolder) return coronaFileName(key);
+
+    QString name = coronaFileNameWithoutExtension(coronaFileDirectory(key))
+                 + "/" + coronaFileNameWithoutExtension(key);
+    if (name == key) name = coronaFileNameWithoutExtension(key);
+    return name;
+}
+
+QByteArray exportCorona(const QMap<QString, SpriteFrameInfo>& frames,
+                        const QSize& textureSize,
+                        bool keepParentFolder)
+{
+    QJsonArray jsonFrames;
+    QJsonObject frameIndex;
+    int index = 1;
+
+    for (auto it = frames.cbegin(); it != frames.cend(); ++it) {
+        const SpriteFrameInfo& frame = it.value();
+        const QString name = coronaFrameName(it.key(), keepParentFolder);
+        QJsonObject value{
+            {"x", frame.frame.x()},
+            {"y", frame.frame.y()},
+            {"width", frame.rotated ? frame.frame.height() : frame.frame.width()},
+            {"height", frame.rotated ? frame.frame.width() : frame.frame.height()},
+            {"name", name}
+        };
+        if (frame.rotated) value.insert("rotated", true);
+        jsonFrames.append(value);
+        frameIndex.insert(name, index++);
+    }
+
+    QJsonObject sheet{
+        {"sheetContentWidth", textureSize.width()},
+        {"sheetContentHeight", textureSize.height()},
+        {"frames", jsonFrames}
+    };
+    QByteArray data = QJsonDocument(QJsonObject{
+        {"sheet", sheet},
+        {"frameIndex", frameIndex}
+    }).toJson(QJsonDocument::Compact);
+    if (data.endsWith('\n')) data.chop(1);
+    return data;
 }
 
 QByteArray exportSimpleJson(const QMap<QString, SpriteFrameInfo>& frames)
@@ -261,7 +328,7 @@ QByteArray exportGodotAnimations(const QString& imageFilePath, const QMap<QStrin
 
 QStringList DataExporter::supportedFormats()
 {
-    return {"cocos2d", "cocos2d-old", "godot-anim", "godot-parts", "json", "phaser", "pixijs"};
+    return {"cocos2d", "cocos2d-old", "corona", "corona2", "godot-anim", "godot-parts", "json", "phaser", "pixijs"};
 }
 
 bool DataExporter::exportData(const QString& format,
@@ -279,6 +346,9 @@ bool DataExporter::exportData(const QString& format,
 
     if (format == "json") {
         result->data = exportSimpleJson(frames);
+        result->extension = "json";
+    } else if (format == "corona" || format == "corona2") {
+        result->data = exportCorona(frames, textureSize, format == "corona2");
         result->extension = "json";
     } else if (format == "pixijs") {
         result->data = exportPixi(imageFilePath, frames);

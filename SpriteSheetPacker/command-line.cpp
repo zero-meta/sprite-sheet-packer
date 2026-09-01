@@ -249,7 +249,7 @@ int commandLine(QCoreApplication& app)
     parser.addPositionalArgument("destination", "Output directory. Optional when a project contains one.", "[destination]");
 
     parser.addOptions({
-        {{"f", "format"}, "Metadata format: cocos2d, cocos2d-old, json, pixijs, phaser, godot-parts, godot-anim, or none.", "format", "cocos2d"},
+        {{"f", "format"}, "Metadata format (see --list-formats).", "format", "cocos2d"},
         {{"o", "output-name"}, "Output base name for direct image/directory input.", "name"},
         {{"trim-mode", "trimMode"}, "Trim mode: Rect or Polygon.", "mode", "Rect"},
         {"algorithm", "Packing algorithm: Rect or Polygon.", "mode", "Rect"},

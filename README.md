@@ -10,7 +10,7 @@ are not part of the build.
 - Trimming, scaling, rotation, borders, power-of-two and square sheets
 - Multiple sheets and project scaling variants
 - PNG texture output
-- Cocos2d plist, generic JSON, PixiJS, Phaser, and Godot metadata
+- Cocos2d plist, Corona/Solar2D, generic JSON, PixiJS, Phaser, and Godot metadata
 - `.ssp`, JSON project, and TexturePacker `.tps` input
 
 The metadata exporters are implemented in C++, so Qt QML is not required.
@@ -67,6 +67,10 @@ Run `sprite-sheet-packer --help` for all packing options, or
 `sprite-sheet-packer --list-formats` for the built-in metadata formats.
 `sprite-sheet-packer --list-image-formats` reports the input formats currently
 provided by Qt and installed image plugins.
+
+The two Corona/Solar2D formats produce the same compact JSON structure but use
+different frame names: `corona` keeps only the sprite file name, while
+`corona2` keeps `direct-parent/file-name` and removes extensions.
 
 Only PNG texture output is currently supported. Legacy optipng/pngquant
 optimization and PVRTexTool-based PVR/PKM output are intentionally excluded.
