@@ -6,6 +6,28 @@
 #include "ImageRotate.h"
 #include "PolygonImage.h"
 
+#include <QElapsedTimer>
+#include <QImageReader>
+
+namespace {
+
+QImage applyHeuristicMask(const QImage& source)
+{
+    const QImage mask = source.createHeuristicMask();
+    QImage result = source.convertToFormat(QImage::Format_ARGB32);
+    for (int y = 0; y < result.height(); ++y) {
+        QRgb* scanLine = reinterpret_cast<QRgb*>(result.scanLine(y));
+        for (int x = 0; x < result.width(); ++x) {
+            if (mask.pixelIndex(x, y) == 0) {
+                scanLine[x] = qRgba(qRed(scanLine[x]), qGreen(scanLine[x]), qBlue(scanLine[x]), 0);
+            }
+        }
+    }
+    return result;
+}
+
+} // namespace
+
 int pow2(int len) {
     int order = 1;
     while(pow(2,order) < len)
@@ -99,7 +121,7 @@ void SpriteAtlas::enablePolygonMode(bool enable, float epsilon) {
 bool SpriteAtlas::generate(SpriteAtlasGenerateProgress* progress) {
     _aborted = false;
 
-    QTime timePerform;
+    QElapsedTimer timePerform;
     timePerform.start();
 
     _outputData.clear();
@@ -110,7 +132,12 @@ bool SpriteAtlas::generate(SpriteAtlasGenerateProgress* progress) {
         _progress->setProgressText(QString("Optimizing sprites..."));
 
     QStringList nameFilter;
-    nameFilter << "*.png" << "*.jpg" << "*.jpeg" << "*.gif" << "*.bmp";
+    for (const QByteArray& format : QImageReader::supportedImageFormats()) {
+        const QString suffix = QString::fromLatin1(format);
+        nameFilter.append("*." + suffix);
+        nameFilter.append("*." + suffix.toUpper());
+    }
+    nameFilter.removeDuplicates();
 
     QList< QPair<QString, QString> > fileList;
     for(auto pathName: _sourceList) {
@@ -154,9 +181,7 @@ bool SpriteAtlas::generate(SpriteAtlasGenerateProgress* progress) {
 
         // Apply Heuristic mask
         if (_heuristicMask) {
-            QPixmap pix = QPixmap::fromImage(image);
-            pix.setMask(pix.createHeuristicMask());
-            image = pix.toImage();
+            image = applyHeuristicMask(image);
         }
 
         PackContent packContent((*it_f).second, image);
@@ -170,6 +195,14 @@ bool SpriteAtlas::generate(SpriteAtlasGenerateProgress* progress) {
                 packContent.setPolygons(polygonImage.polygons());
                 packContent.setTriangles(polygonImage.triangles());
             }
+        }
+
+        const int usableSize = _maxTextureSize - _textureBorder * 2;
+        if (usableSize <= 0
+            || packContent.rect().width() + _spriteBorder > usableSize
+            || packContent.rect().height() + _spriteBorder > usableSize) {
+            qWarning() << "Sprite exceeds maximum texture size:" << packContent.name();
+            return false;
         }
 
         // Find Identical
@@ -188,6 +221,10 @@ bool SpriteAtlas::generate(SpriteAtlasGenerateProgress* progress) {
         }
 
         inputContent.push_back(packContent);
+    }
+    if (inputContent.isEmpty()) {
+        qWarning() << "No readable images found.";
+        return false;
     }
     if (skipSprites)
         qDebug() << "Total skip sprites: " << skipSprites;
@@ -508,7 +545,8 @@ bool SpriteAtlas::packWithPolygon(const QVector<PackContent>& content) {
         for (auto vert: packContent.triangles().verts) {
             triangles.verts.push_back(PolyPack2D::Point(vert.x(), vert.y()));
         }
-        triangles.indices = packContent.triangles().indices.toStdVector();
+        triangles.indices.assign(packContent.triangles().indices.cbegin(),
+                                 packContent.triangles().indices.cend());
         inputContent += PolyPack2D::Content<PackContent>(packContent, triangles, _spriteBorder);
     }
 
@@ -551,8 +589,11 @@ bool SpriteAtlas::packWithPolygon(const QVector<PackContent>& content) {
         spriteFrame.sourceSize = packContent.image().size();
 
         QPainterPath clipPath;
-        for (auto polygon: packContent.polygons()) {
-            clipPath.addPolygon(QPolygonF(QVector<QPointF>::fromStdVector(polygon)));
+        for (const auto& polygon: packContent.polygons()) {
+            QPolygonF qtPolygon;
+            qtPolygon.reserve(static_cast<qsizetype>(polygon.size()));
+            for (const QPointF& point : polygon) qtPolygon.append(point);
+            clipPath.addPolygon(qtPolygon);
         }
         clipPath.translate(content.bounds().left + _textureBorder, content.bounds().top + _textureBorder);
         painter.setClipPath(clipPath);

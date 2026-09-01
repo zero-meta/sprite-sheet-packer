@@ -11,7 +11,8 @@ static QDomElement textElement(QDomDocument& doc, QString tagName, QString conte
 
 static QDomElement serializePrimitive(QDomDocument &doc, const QVariant &variant) {
 	QDomElement result;
-	if (variant.type() == QVariant::Bool) {
+	const int type = variant.metaType().id();
+	if (type == QMetaType::Bool) {
 		if (variant.toBool()) {
             result = doc.createElement("true");
 		}
@@ -19,22 +20,23 @@ static QDomElement serializePrimitive(QDomDocument &doc, const QVariant &variant
             result = doc.createElement("false");
         }
 	}
-	else if (variant.type() == QVariant::Date) {
+	else if (type == QMetaType::QDate) {
 		result = textElement(doc, "date", variant.toDate().toString(Qt::ISODate));
 	}
-	else if (variant.type() == QVariant::DateTime) {
+	else if (type == QMetaType::QDateTime) {
 		result = textElement(doc, "date", variant.toDateTime().toString(Qt::ISODate));
 	}
-	else if (variant.type() == QVariant::ByteArray) {
+	else if (type == QMetaType::QByteArray) {
 		result = textElement(doc, "data", variant.toByteArray().toBase64());
 	}
-	else if (variant.type() == QVariant::String) {
+	else if (type == QMetaType::QString) {
 		result = textElement(doc, "string", variant.toString());
 	}
-	else if (variant.type() == QVariant::Int) {
-		result = textElement(doc, "integer", QString::number(variant.toInt()));
+	else if (type == QMetaType::Int || type == QMetaType::UInt
+	         || type == QMetaType::LongLong || type == QMetaType::ULongLong) {
+		result = textElement(doc, "integer", QString::number(variant.toLongLong()));
 	}
-	else if (variant.canConvert(QVariant::Double)) {
+	else if (variant.canConvert<double>()) {
 		QString num;
 		num.setNum(variant.toDouble());
 		result = textElement(doc, "real", num);
@@ -43,10 +45,10 @@ static QDomElement serializePrimitive(QDomDocument &doc, const QVariant &variant
 }
 
 QDomElement PListSerializer::serializeElement(QDomDocument &doc, const QVariant &variant) {
-	if (variant.type() == QVariant::Map) {
+	if (variant.metaType().id() == QMetaType::QVariantMap) {
 		return serializeMap(doc, variant.toMap());
 	}
-	else if (variant.type() == QVariant::List) {
+	else if (variant.metaType().id() == QMetaType::QVariantList) {
 		 return serializeList(doc, variant.toList());
 	}
 	else {

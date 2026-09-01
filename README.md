@@ -1,40 +1,76 @@
-# SpriteSheet Packer
-Sprite sheet generator base on Qt created by Aleksey Makaseev.
+# Sprite Sheet Packer CLI
 
-### Features ###
-* Support multiple screen resolutions
-* Pack multiple sprite sheets at once
-* Trimming / Cropping (Save space by removing transparency)
-* Include GUI and command-line interface.
-* Support MacOS, Windows and Linux
+A Qt 6 command-line sprite-sheet generator for macOS, Linux, and Windows. This
+branch builds a native CLI only; the legacy Qt Widgets GUI and PVR texture path
+are not part of the build.
 
-Uses [Qt - Digia Plc](http://qt-project.org), LGPL license.
+## Features
 
-![preview](/../gh-pages/screens/main.png?raw=true "Main screen")
+- Rectangular and polygon packing
+- Trimming, scaling, rotation, borders, power-of-two and square sheets
+- Multiple sheets and project scaling variants
+- PNG texture output
+- Cocos2d plist, generic JSON, PixiJS, Phaser, and Godot metadata
+- `.ssp`, JSON project, and TexturePacker `.tps` input
 
-### Supported publish spritesheet formats ###
-* [cocos2d-x](http://www.cocos2d-x.org) (plist)
-* [pixijs](http://www.pixijs.com) (json)
-* [phaser](https://phaser.io) (json)
-* simple json
+The metadata exporters are implemented in C++, so Qt QML is not required.
 
+## Dependencies
 
-## Documentation
-See the [Documentation](http://amakaseev.github.io/sprite-sheet-packer) for use.
+The required Qt modules are `Core`, `Gui`, and `Xml`. On macOS with Homebrew:
 
+```sh
+brew install qtbase cmake ninja
+```
 
-## Release builds
-Download [pre-build](https://github.com/amakaseev/sprite-sheet-packer/releases)
+`qtimageformats` is optional. Install it when additional input image formats
+such as WebP or TIFF are needed:
 
+```sh
+brew install qtimageformats
+```
+
+## Build
+
+```sh
+cmake -S . -B build -G Ninja \
+  -DCMAKE_PREFIX_PATH="$(brew --prefix qtbase)" \
+  -DCMAKE_BUILD_TYPE=Release
+cmake --build build
+```
+
+The executable is `build/sprite-sheet-packer`.
+
+## Usage
+
+Pack a directory and write a PNG plus PixiJS JSON:
+
+```sh
+build/sprite-sheet-packer path/to/sprites path/to/output \
+  --format pixijs \
+  --output-name player
+```
+
+Build using settings and output paths stored in a project:
+
+```sh
+build/sprite-sheet-packer path/to/project.ssp
+```
+
+An explicit destination overrides the one stored in a project:
+
+```sh
+build/sprite-sheet-packer path/to/project.ssp path/to/output
+```
+
+Run `sprite-sheet-packer --help` for all packing options, or
+`sprite-sheet-packer --list-formats` for the built-in metadata formats.
+`sprite-sheet-packer --list-image-formats` reports the input formats currently
+provided by Qt and installed image plugins.
+
+Only PNG texture output is currently supported. Legacy optipng/pngquant
+optimization and PVRTexTool-based PVR/PKM output are intentionally excluded.
 
 ## License
-See the [LICENSE](LICENSE.md) file for license rights and limitations (MIT).
 
-
-## Changelog
-[CHANGELOG](CHANGELOG.md) file for all change logs.
-
-
-## Developers
-See the [AUTHORS](AUTHORS.md) file.
-
+See [LICENSE.md](LICENSE.md).

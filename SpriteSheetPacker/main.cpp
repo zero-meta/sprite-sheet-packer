@@ -1,27 +1,15 @@
-#include "MainWindow.h"
-#include "SpritePackerProjectFile.h"
-#include <QApplication>
+#include <QCoreApplication>
 
 int commandLine(QCoreApplication& app);
 
 int main(int argc, char *argv[])
 {
-    QApplication app(argc, argv);
+    QCoreApplication app(argc, argv);
 
     QCoreApplication::setOrganizationName("amakaseev");
     QCoreApplication::setOrganizationDomain("spicyminds-lab.com");
-    QCoreApplication::setApplicationName("SpriteSheetPacker");
-    QCoreApplication::setApplicationVersion("1.0.9");
+    QCoreApplication::setApplicationName("sprite-sheet-packer");
+    QCoreApplication::setApplicationVersion("1.1.0");
 
-    SpritePackerProjectFile::factory().set<SpritePackerProjectFile>("json");
-    SpritePackerProjectFile::factory().set<SpritePackerProjectFile>("ssp");
-    SpritePackerProjectFile::factory().set<SpritePackerProjectFileTPS>("tps");
-
-    if (argc > 1) {
-        return commandLine(app);
-    } else {
-        MainWindow* wnd = new MainWindow();
-        wnd->show();
-        return app.exec();
-    }
+    return commandLine(app);
 }

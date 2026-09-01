@@ -41,19 +41,12 @@ private:
     Polygons  _polygons;
 };
 
-class SpriteAtlasGenerateProgress: public QObject
+class SpriteAtlasGenerateProgress
 {
-    Q_OBJECT
 public:
-    explicit SpriteAtlasGenerateProgress() { }
-    ~SpriteAtlasGenerateProgress() {}
+    virtual ~SpriteAtlasGenerateProgress() = default;
 
-    void setProgressText(const QString& message) {
-        emit progressTextChanged(message);
-    }
-
-signals:
-    void progressTextChanged(const QString&);
+    virtual void setProgressText(const QString&) { }
 };
 
 class SpriteAtlas

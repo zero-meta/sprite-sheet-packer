@@ -3,7 +3,6 @@
 
 #include <QtCore>
 #include "ImageFormat.h"
-#include "GenericObjectFactory.h"
 
 struct ScalingVariant{
     QString name;
@@ -35,7 +34,7 @@ public:
     bool heuristicMask() const { return _heuristicMask; }
 
     void setRotateSprites(bool rotate) { _rotateSprites = rotate; }
-    bool rotateSprites() { return _rotateSprites; }
+    bool rotateSprites() const { return _rotateSprites; }
 
     void setTextureBorder(int textureBorder) { _textureBorder = textureBorder; }
     int textureBorder() const { return _textureBorder; }
@@ -86,14 +85,10 @@ public:
     bool prependSmartFolderName() const { return _prependSmartFolderName; }
 
     void setEncryptionKey(const QString& key) { _encryptionKey = key; }
-    const QString& encryptionKey() { return _encryptionKey; }
+    const QString& encryptionKey() const { return _encryptionKey; }
 
     virtual bool write(const QString& fileName);
     virtual bool read(const QString& fileName);
-
-    static GenericObjectFactory<std::string, SpritePackerProjectFile>& factory() {
-        return _factory;
-    }
 
 protected:
     QString     _algorithm;
@@ -124,8 +119,6 @@ protected:
     bool        _prependSmartFolderName;
     QString     _encryptionKey;
 
-private:
-    static GenericObjectFactory<std::string, SpritePackerProjectFile> _factory;
 };
 
 class SpritePackerProjectFileTPS: public SpritePackerProjectFile {

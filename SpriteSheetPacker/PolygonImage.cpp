@@ -5,6 +5,14 @@
 
 const static float PRECISION = 10.f;
 
+static QPolygonF toPolygon(const std::vector<QPointF>& points)
+{
+    QPolygonF polygon;
+    polygon.reserve(static_cast<qsizetype>(points.size()));
+    for (const QPointF& point : points) polygon.append(point);
+    return polygon;
+}
+
 /** Clamp a value between from and to.
  */
 
@@ -40,7 +48,7 @@ PolygonImage::PolygonImage(const QImage& image, const QRectF& rect, const float 
             }
 
             // erase contour for find next
-            QPolygonF fillPolygon(QVector<QPointF>::fromStdVector(polyPoint));
+            QPolygonF fillPolygon = toPolygon(polyPoint);
             fillPolygon.translate(rect.x(), rect.y());
             QColor fillColor(0, 0, 0, 0);
             QPen pen(fillColor);
@@ -86,7 +94,7 @@ PolygonImage::PolygonImage(const QImage& image, const QRectF& rect, const float 
         }
 
         // erase contour for find next
-        QPolygonF fillPolygon(QVector<QPointF>::fromStdVector(p));
+        QPolygonF fillPolygon = toPolygon(p);
         fillPolygon.translate(rect.x(), rect.y());
         QColor fillColor(0, 0, 0, 0);
         QPen pen(fillColor);
@@ -365,7 +373,8 @@ float PolygonImage::perpendicularDistance(const QPointF& i, const QPointF& start
     } else {
         slope = (end.y() - start.y()) / (end.x() - start.x());
         intercept = start.y() - (slope * start.x());
-        res = fabsf(slope * i.x() - i.y() + intercept) / sqrtf(powf(slope, 2) + 1);
+        res = static_cast<float>(std::abs(slope * i.x() - i.y() + intercept)
+                                 / std::sqrt(slope * slope + 1));
     }
     return res;
 }

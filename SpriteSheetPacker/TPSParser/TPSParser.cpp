@@ -6,15 +6,12 @@
 QVariant TPSParser::parse(QIODevice *device) {
 	QVariantMap result;
 	QDomDocument doc;
-	QString errorMessage;
-	int errorLine;
-	int errorColumn;
-	bool success = doc.setContent(device, false, &errorMessage, &errorLine, &errorColumn);
-	if (!success) {
+	const QDomDocument::ParseResult parseResult = doc.setContent(device);
+	if (!parseResult) {
         qDebug() << "TPSParser Warning: Could not parse tps file!";
-		qDebug() << "Error message: " << errorMessage;
-		qDebug() << "Error line: " << errorLine;
-		qDebug() << "Error column: " << errorColumn;
+		qDebug() << "Error message: " << parseResult.errorMessage;
+		qDebug() << "Error line: " << parseResult.errorLine;
+		qDebug() << "Error column: " << parseResult.errorColumn;
 		return result;
 	}
 	QDomElement root = doc.documentElement();

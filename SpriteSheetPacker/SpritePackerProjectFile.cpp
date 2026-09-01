@@ -1,11 +1,7 @@
 #include "SpritePackerProjectFile.h"
-#include "PublishSpriteSheet.h"
+#include "DataExporter.h"
 
 #include "TPSParser.h"
-#include "PListParser.h"
-#include "PListSerializer.h"
-
-GenericObjectFactory<std::string, SpritePackerProjectFile> SpritePackerProjectFile::_factory;
 
 SpritePackerProjectFile::SpritePackerProjectFile() {
     _algorithm = "Rect";
@@ -16,7 +12,7 @@ SpritePackerProjectFile::SpritePackerProjectFile() {
     _rotateSprites = false;
     _textureBorder = 0;
     _spriteBorder = 2;
-    _imageFormat = kPNG,
+    _imageFormat = kPNG;
     _pixelFormat = kARGB8888;
     _premultiplied = true;
     _pngOptMode = "None";
@@ -26,6 +22,7 @@ SpritePackerProjectFile::SpritePackerProjectFile() {
 
     _trimSpriteNames = true;
     _prependSmartFolderName = true;
+    _dataFormat = "cocos2d";
 }
 
 SpritePackerProjectFile::~SpritePackerProjectFile() {
@@ -36,11 +33,13 @@ SpritePackerProjectFile::~SpritePackerProjectFile() {
 bool SpritePackerProjectFile::read(const QString &fileName) {
     QDir dir(QFileInfo(fileName).absolutePath());
     QFile file(fileName);
-    file.open(QIODevice::ReadOnly);
+    if (!file.open(QIODevice::ReadOnly)) return false;
 
-    QJsonObject json = QJsonDocument::fromJson(file.readAll()).object();
+    QJsonParseError parseError;
+    const QJsonDocument document = QJsonDocument::fromJson(file.readAll(), &parseError);
+    const QJsonObject json = document.object();
 
-    if (json.isEmpty()) {
+    if (parseError.error != QJsonParseError::NoError || json.isEmpty()) {
         return false;
     }
 
@@ -75,7 +74,7 @@ bool SpritePackerProjectFile::read(const QString &fileName) {
     }
 
     if (json.contains("dataFormat"))  _dataFormat = json["dataFormat"].toString();
-    if (json.contains("destPath")) _destPath = QDir(dir.absoluteFilePath(json["destPath"].toString())).canonicalPath();
+    if (json.contains("destPath")) _destPath = QDir(dir.absoluteFilePath(json["destPath"].toString())).absolutePath();
     if (json.contains("spriteSheetName")) _spriteSheetName = json["spriteSheetName"].toString();
 
     _srcList.clear();
@@ -136,16 +135,15 @@ bool SpritePackerProjectFile::write(const QString &fileName) {
     json["encryptionKey"] = _encryptionKey;
 
     QFile file(fileName);
-    file.open(QIODevice::WriteOnly | QIODevice::Text);
-    file.write(QJsonDocument(json).toJson());
-
-    return true;
+    if (!file.open(QIODevice::WriteOnly | QIODevice::Text)) return false;
+    const QByteArray contents = QJsonDocument(json).toJson();
+    return file.write(contents) == contents.size();
 }
 
 bool SpritePackerProjectFileTPS::read(const QString &fileName) {
     QDir dir(QFileInfo(fileName).absolutePath());
     QFile file(fileName);
-    file.open(QIODevice::ReadOnly);
+    if (!file.open(QIODevice::ReadOnly)) return false;
     QVariant tps = TPSParser::parse(&file);
 
     if (!tps.isValid()) {
@@ -156,7 +154,7 @@ bool SpritePackerProjectFileTPS::read(const QString &fileName) {
 
     QVariantMap tpsMap = tps.toMap();
 
-    if (PublishSpriteSheet::formats().find(tpsMap["dataFormat"].toString()) != PublishSpriteSheet::formats().end()) {
+    if (DataExporter::supportedFormats().contains(tpsMap["dataFormat"].toString())) {
         _dataFormat = tpsMap["dataFormat"].toString();
     }
 
@@ -176,7 +174,7 @@ bool SpritePackerProjectFileTPS::read(const QString &fileName) {
         QVariantMap globalSpriteSettings = tpsMap["globalSpriteSettings"].toMap();
         _trimThreshold = globalSpriteSettings["trimThreshold"].toInt();
 
-        if (globalSpriteSettings.find("scale") != tpsMap.end()) {
+        if (globalSpriteSettings.find("scale") != globalSpriteSettings.end()) {
             globalScale = globalSpriteSettings["scale"].toFloat();
         }
     }
@@ -248,7 +246,7 @@ bool SpritePackerProjectFileTPS::read(const QString &fileName) {
             QVariantMap data = dataFileNames["data"].toMap();
             if (data.find("name") != data.end()) {
                 QFileInfo fi(dir.absoluteFilePath(data["name"].toString()));
-                _destPath = fi.dir().canonicalPath();
+                _destPath = fi.dir().absolutePath();
                 _spriteSheetName = fi.baseName();
             }
         }
@@ -280,8 +278,6 @@ bool SpritePackerProjectFileTPS::read(const QString &fileName) {
     foreach (QVariant spriteFile, spritesList) {
         _srcList.append(dir.absoluteFilePath(spriteFile.toString()));
     }
-
-    qDebug() << tps;
 
     return true;
 }
