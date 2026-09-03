@@ -44,6 +44,8 @@ public:
 
     void setExtrude(int pixels) { _extrude = pixels; }
     int extrude() const { return _extrude; }
+    void setExtrudeRules(const QVector<QPair<QString, int>>& rules) { _extrudeRules = rules; }
+    const QVector<QPair<QString, int>>& extrudeRules() const { return _extrudeRules; }
 
     void setImageFormat(ImageFormat imageFormat) { _imageFormat = imageFormat; }
     ImageFormat imageFormat() const { return _imageFormat; }
@@ -106,6 +108,7 @@ protected:
     int         _textureBorder;
     int         _spriteBorder;
     int         _extrude;
+    QVector<QPair<QString, int>> _extrudeRules;
     ImageFormat _imageFormat;
     PixelFormat _pixelFormat;
     bool        _premultiplied;

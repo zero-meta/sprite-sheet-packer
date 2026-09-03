@@ -267,7 +267,11 @@ file(WRITE "${OUTPUT}/smoke.ssp" "{
   \"algorithm\": \"Rect\",
   \"imageFormat\": \"${project_texture_format}\",
   \"pixelFormat\": \"ARGB8888\",
-  \"extrude\": 1,
+  \"extrude\": 0,
+  \"extrudeRules\": [
+    {\"pattern\": \"**/*.png\", \"pixels\": 1},
+    {\"pattern\": \"nested/**\", \"pixels\": 3}
+  ],
   \"pngOptMode\": \"Lossy\",
   \"pngQuantQuality\": \"80-95\",
   \"dataFormat\": \"pixijs\",
@@ -302,10 +306,31 @@ if(NOT project_frame_count EQUAL 2)
 endif()
 string(JSON project_frame_x GET "${project_json}" frames "./icon-addFolder" frame x)
 string(JSON project_frame_y GET "${project_json}" frames "./icon-addFolder" frame y)
-if(project_frame_x LESS 1 OR project_frame_y LESS 1)
-    message(FATAL_ERROR "Project extrude setting was not applied")
+string(JSON project_alias_frame_x GET "${project_json}" frames "nested/anim/walk" frame x)
+string(JSON project_alias_frame_y GET "${project_json}" frames "nested/anim/walk" frame y)
+if(NOT project_frame_x EQUAL 3
+   OR NOT project_frame_y EQUAL 3
+   OR NOT project_alias_frame_x EQUAL project_frame_x
+   OR NOT project_alias_frame_y EQUAL project_frame_y)
+    message(FATAL_ERROR "Project extrudeRules or identical-frame maximum was not applied")
 endif()
 string(JSON project_image GET "${project_json}" meta image)
 if(NOT project_image STREQUAL "@1x-project.${project_texture_extension}")
     message(FATAL_ERROR "Project imageFormat was not used by the texture writer")
+endif()
+
+execute_process(
+    COMMAND "${CLI}" "${OUTPUT}/smoke.ssp" "${OUTPUT}/project-override" --extrude 0
+    RESULT_VARIABLE result
+    OUTPUT_VARIABLE stdout
+    ERROR_VARIABLE stderr
+)
+if(NOT result EQUAL 0)
+    message(FATAL_ERROR "Project extrusion override failed (${result}):\n${stdout}\n${stderr}")
+endif()
+file(READ "${OUTPUT}/project-override/@1x-project.json" override_json)
+string(JSON override_frame_x GET "${override_json}" frames "./icon-addFolder" frame x)
+string(JSON override_frame_y GET "${override_json}" frames "./icon-addFolder" frame y)
+if(NOT override_frame_x EQUAL 0 OR NOT override_frame_y EQUAL 0)
+    message(FATAL_ERROR "Explicit --extrude did not override project extrudeRules")
 endif()

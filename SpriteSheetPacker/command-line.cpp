@@ -23,6 +23,7 @@ struct PackOptions {
     int textureBorder = 0;
     int spriteBorder = 2;
     int extrude = 0;
+    QVector<QPair<QString, int>> extrudeRules;
     bool heuristicMask = false;
     bool rotateSprites = false;
     bool powerOfTwo = false;
@@ -141,6 +142,7 @@ PackOptions optionsFromProject(const SpritePackerProjectFile& project)
     options.textureBorder = project.textureBorder();
     options.spriteBorder = project.spriteBorder();
     options.extrude = project.extrude();
+    options.extrudeRules = project.extrudeRules();
     options.heuristicMask = project.heuristicMask();
     options.rotateSprites = project.rotateSprites();
     options.dataFormat = project.dataFormat().isEmpty() ? "cocos2d" : project.dataFormat().toLower();
@@ -215,6 +217,13 @@ bool applyOverrides(const QCommandLineParser& parser, PackOptions* options, QStr
         *error = "Project extrude must be an integer from 0 to 4096.";
         return false;
     }
+    for (const auto& rule : options->extrudeRules) {
+        if (rule.first.trimmed().isEmpty() || rule.second < 0 || rule.second > 4096) {
+            *error = "Project extrudeRules require a non-empty pattern and pixels from 0 to 4096.";
+            return false;
+        }
+    }
+    if (parser.isSet("extrude")) options->extrudeRules.clear();
 
     if (parser.isSet("power-of-two")) options->powerOfTwo = true;
     if (parser.isSet("force-squared")) options->forceSquared = true;
@@ -232,7 +241,11 @@ bool applyOverrides(const QCommandLineParser& parser, PackOptions* options, QStr
         *error = "Texture format must be png, webp, or jpg.";
         return false;
     }
-    if (options->extrude > 0
+    bool hasExtrusion = options->extrude > 0;
+    for (const auto& rule : options->extrudeRules) {
+        hasExtrusion = hasExtrusion || rule.second > 0;
+    }
+    if (hasExtrusion
         && options->algorithm == "Polygon"
         && options->trimMode == "Polygon") {
         *error = "--extrude is not supported with polygon packing.";
@@ -338,6 +351,7 @@ bool addAtlas(PublishSpriteSheet* publisher,
                       options.maxSize,
                       options.scale);
     atlas.setExtrude(options.extrude);
+    atlas.setExtrudeRules(options.extrudeRules);
     atlas.setRotateSprites(options.rotateSprites);
     atlas.setAlgorithm(options.algorithm);
     if (options.trimMode == "Polygon") {

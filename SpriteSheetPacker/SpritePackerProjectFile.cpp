@@ -54,6 +54,12 @@ bool SpritePackerProjectFile::read(const QString &fileName) {
     if (json.contains("textureBorder")) _textureBorder = json["textureBorder"].toInt();
     if (json.contains("spriteBorder")) _spriteBorder = json["spriteBorder"].toInt();
     if (json.contains("extrude")) _extrude = json["extrude"].toInt();
+    _extrudeRules.clear();
+    const QJsonArray extrudeRules = json["extrudeRules"].toArray();
+    for (const QJsonValue& value : extrudeRules) {
+        const QJsonObject rule = value.toObject();
+        _extrudeRules.append({rule["pattern"].toString(), rule["pixels"].toInt(-1)});
+    }
     if (json.contains("imageFormat")) _imageFormat = imageFormatFromString(json["imageFormat"].toString());
     if (json.contains("pixelFormat")) _pixelFormat = pixelFormatFromString(json["pixelFormat"].toString());
     if (json.contains("premultiplied")) _premultiplied = json["premultiplied"].toBool();
@@ -108,6 +114,14 @@ bool SpritePackerProjectFile::write(const QString &fileName) {
     json["textureBorder"] = _textureBorder;
     json["spriteBorder"] = _spriteBorder;
     json["extrude"] = _extrude;
+    QJsonArray extrudeRules;
+    for (const auto& rule : _extrudeRules) {
+        extrudeRules.append(QJsonObject{
+            {"pattern", rule.first},
+            {"pixels", rule.second}
+        });
+    }
+    json["extrudeRules"] = extrudeRules;
     json["imageFormat"] = imageFormatToString(_imageFormat);
     json["pixelFormat"] = pixelFormatToString(_pixelFormat);
     json["premultiplied"] = _premultiplied;

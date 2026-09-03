@@ -9,6 +9,7 @@
 #include <QElapsedTimer>
 #include <QImageReader>
 #include <QPainter>
+#include <QRegularExpression>
 
 namespace {
 
@@ -61,6 +62,43 @@ QImage extrudedImage(const QImage& source, int pixels)
                       source,
                       QRect(width - 1, height - 1, 1, 1));
     return result;
+}
+
+QString normalizedRulePath(QString path)
+{
+    path = QDir::fromNativeSeparators(path);
+    while (path.startsWith("./")) path.remove(0, 2);
+    return path;
+}
+
+QRegularExpression globExpression(const QString& sourcePattern)
+{
+    const QString pattern = normalizedRulePath(sourcePattern);
+    QString expression = "^";
+
+    for (int i = 0; i < pattern.size(); ++i) {
+        const QChar character = pattern.at(i);
+        if (character == '*') {
+            if (i + 1 < pattern.size() && pattern.at(i + 1) == '*') {
+                ++i;
+                if (i + 1 < pattern.size() && pattern.at(i + 1) == '/') {
+                    ++i;
+                    expression += "(?:.*/)?";
+                } else {
+                    expression += ".*";
+                }
+            } else {
+                expression += "[^/]*";
+            }
+        } else if (character == '?') {
+            expression += "[^/]";
+        } else {
+            expression += QRegularExpression::escape(QString(character));
+        }
+    }
+
+    expression += '$';
+    return QRegularExpression(expression);
 }
 
 } // namespace
@@ -166,13 +204,14 @@ bool SpriteAtlas::generate(SpriteAtlasGenerateProgress* progress) {
 
     _progress = progress;
 
-    if (_extrude > 0 && _algorithm == "Polygon" && _polygonMode.enable) {
-        qWarning() << "Edge extrusion is not supported with polygon packing.";
-        return false;
-    }
-
     if (_progress)
         _progress->setProgressText(QString("Optimizing sprites..."));
+
+    QVector<QPair<QRegularExpression, int>> extrudeRules;
+    extrudeRules.reserve(_extrudeRules.size());
+    for (const auto& rule : _extrudeRules) {
+        extrudeRules.append({globExpression(rule.first), rule.second});
+    }
 
     QStringList nameFilter;
     for (const QByteArray& format : QImageReader::supportedImageFormats()) {
@@ -228,6 +267,13 @@ bool SpriteAtlas::generate(SpriteAtlasGenerateProgress* progress) {
         }
 
         PackContent packContent((*it_f).second, image);
+        int extrusion = _extrude;
+        const QString rulePath = normalizedRulePath(packContent.name());
+        for (const auto& rule : extrudeRules) {
+            if (rule.first.match(rulePath).hasMatch()) extrusion = rule.second;
+        }
+        packContent.setExtrude(extrusion);
+        qDebug() << "extrude:" << packContent.name() << extrusion;
 
         // Trim / Crop
         if (_trim) {
@@ -242,8 +288,8 @@ bool SpriteAtlas::generate(SpriteAtlasGenerateProgress* progress) {
 
         const int usableSize = _maxTextureSize - _textureBorder * 2;
         if (usableSize <= 0
-            || packContent.rect().width() + _extrude * 2 + _spriteBorder > usableSize
-            || packContent.rect().height() + _extrude * 2 + _spriteBorder > usableSize) {
+            || packContent.rect().width() + packContent.extrude() * 2 + _spriteBorder > usableSize
+            || packContent.rect().height() + packContent.extrude() * 2 + _spriteBorder > usableSize) {
             qWarning() << "Sprite exceeds maximum texture size:" << packContent.name();
             return false;
         }
@@ -253,6 +299,7 @@ bool SpriteAtlas::generate(SpriteAtlasGenerateProgress* progress) {
         for (auto& content: inputContent) {
             if (content.isIdentical(packContent)) {
                 findIdentical = true;
+                content.setExtrude(qMax(content.extrude(), packContent.extrude()));
                 _identicalFrames[content.name()].push_back(packContent.name());
                 qDebug() << "isIdentical:" << packContent.name() << "==" << content.name();
                 skipSprites++;
@@ -271,6 +318,15 @@ bool SpriteAtlas::generate(SpriteAtlasGenerateProgress* progress) {
     }
     if (skipSprites)
         qDebug() << "Total skip sprites: " << skipSprites;
+
+    if (_algorithm == "Polygon" && _polygonMode.enable) {
+        for (const PackContent& content : inputContent) {
+            if (content.extrude() > 0) {
+                qWarning() << "Edge extrusion is not supported with polygon packing.";
+                return false;
+            }
+        }
+    }
 
     bool result = false;
     if ((_algorithm == "Polygon") && (_polygonMode.enable)) {
@@ -294,8 +350,8 @@ bool SpriteAtlas::packWithRect(const QVector<PackContent>& content) {
     for (auto packContent: content) {
         int width = packContent.rect().width();
         int height = packContent.rect().height();
-        const int packedWidth = width + _extrude * 2 + _spriteBorder;
-        const int packedHeight = height + _extrude * 2 + _spriteBorder;
+        const int packedWidth = width + packContent.extrude() * 2 + _spriteBorder;
+        const int packedHeight = height + packContent.extrude() * 2 + _spriteBorder;
         volume += packedWidth * packedHeight * 1.02f;
 
         inputContent += BinPack2D::Content<PackContent>(packContent,
@@ -526,10 +582,11 @@ bool SpriteAtlas::packWithRect(const QVector<PackContent>& content) {
 
         QImage spriteImage = packContent.image().copy(packContent.rect());
         if (content.rotated) spriteImage = rotate90(spriteImage);
-        const QImage imageWithExtrusion = extrudedImage(spriteImage, _extrude);
+        const int extrusion = packContent.extrude();
+        const QImage imageWithExtrusion = extrudedImage(spriteImage, extrusion);
         const QPoint outerPosition(content.coord.x + _textureBorder,
                                    content.coord.y + _textureBorder);
-        const QPoint framePosition = outerPosition + QPoint(_extrude, _extrude);
+        const QPoint framePosition = outerPosition + QPoint(extrusion, extrusion);
 
         SpriteFrameInfo spriteFrame;
         spriteFrame.triangles = packContent.triangles();

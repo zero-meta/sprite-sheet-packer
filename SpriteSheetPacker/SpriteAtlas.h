@@ -26,12 +26,14 @@ public:
     void trim(int alpha);
     void setTriangles(const Triangles& triangles) { _triangles = triangles; }
     void setPolygons(const Polygons& polygons) { _polygons = polygons; }
+    void setExtrude(int pixels) { _extrude = pixels; }
 
     const QString& name() const { return _name; }
     const QImage& image() const { return _image; }
     const QRect& rect() const { return _rect; }
     const Triangles& triangles() const { return _triangles; }
     const Polygons& polygons() const { return _polygons; }
+    int extrude() const { return _extrude; }
 
 private:
     QString _name;
@@ -39,6 +41,7 @@ private:
     QRect   _rect;
     Triangles _triangles;
     Polygons  _polygons;
+    int _extrude = 0;
 };
 
 class SpriteAtlasGenerateProgress
@@ -73,6 +76,7 @@ public:
 
     void setRotateSprites(bool value) { _rotateSprites = value; }
     void setExtrude(int pixels) { _extrude = pixels; }
+    void setExtrudeRules(const QVector<QPair<QString, int>>& rules) { _extrudeRules = rules; }
 
     bool generate(SpriteAtlasGenerateProgress* progress = nullptr);
     void abortGeneration() { _aborted = true; }
@@ -96,6 +100,7 @@ private:
     int _textureBorder;
     int _spriteBorder;
     int _extrude;
+    QVector<QPair<QString, int>> _extrudeRules;
     bool _heuristicMask;
     bool _pow2;
     bool _forceSquared;

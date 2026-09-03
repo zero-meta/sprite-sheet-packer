@@ -86,7 +86,25 @@ settings. Ensure the target runtime can decode the chosen texture format.
 Use `--extrude N` to reserve `N` pixels around every rectangular frame and
 fill them by duplicating its edge pixels. The frame coordinates in metadata
 still describe only the original sprite. Projects use the integer `extrude`
-field. Edge extrusion is intentionally unavailable with polygon packing.
+field as a default and may override selected frames with ordered glob rules:
+
+```json
+{
+  "extrude": 0,
+  "extrudeRules": [
+    {"pattern": "tiles/repeat/**", "pixels": 2},
+    {"pattern": "**/*_repeat.png", "pixels": 1},
+    {"pattern": "tiles/repeat/no_extrude/**", "pixels": 0}
+  ]
+}
+```
+
+Patterns match normalized source frame names with `/` separators and support
+`*`, `?`, and recursive `**`. Rules are evaluated in array order and the last
+match wins. An explicit `--extrude N`, including `--extrude 0`, overrides all
+project rules. If identical images use different values, their shared packed
+frame uses the largest extrusion. Edge extrusion is intentionally unavailable
+with polygon packing.
 
 Use pngquant as an optional lossy post-process when a smaller distribution
 file is more important than exact source pixels:
