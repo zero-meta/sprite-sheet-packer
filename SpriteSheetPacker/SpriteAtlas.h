@@ -72,6 +72,7 @@ public:
     void enablePolygonMode(bool enable, float epsilon = 2.f);
 
     void setRotateSprites(bool value) { _rotateSprites = value; }
+    void setExtrude(int pixels) { _extrude = pixels; }
 
     bool generate(SpriteAtlasGenerateProgress* progress = nullptr);
     void abortGeneration() { _aborted = true; }
@@ -94,6 +95,7 @@ private:
     int _trim;
     int _textureBorder;
     int _spriteBorder;
+    int _extrude;
     bool _heuristicMask;
     bool _pow2;
     bool _forceSquared;

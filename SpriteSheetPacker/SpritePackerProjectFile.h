@@ -42,6 +42,9 @@ public:
     void setSpriteBorder(int spriteBorder) { _spriteBorder = spriteBorder; }
     int spriteBorder() const { return _spriteBorder; }
 
+    void setExtrude(int pixels) { _extrude = pixels; }
+    int extrude() const { return _extrude; }
+
     void setImageFormat(ImageFormat imageFormat) { _imageFormat = imageFormat; }
     ImageFormat imageFormat() const { return _imageFormat; }
 
@@ -102,6 +105,7 @@ protected:
     bool        _rotateSprites;
     int         _textureBorder;
     int         _spriteBorder;
+    int         _extrude;
     ImageFormat _imageFormat;
     PixelFormat _pixelFormat;
     bool        _premultiplied;

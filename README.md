@@ -8,6 +8,7 @@ are not part of the build.
 
 - Rectangular and polygon packing
 - Trimming, scaling, rotation, borders, power-of-two and square sheets
+- Optional edge-pixel extrusion for repeat sampling with linear filtering
 - Multiple sheets and project scaling variants
 - PNG, WebP, and JPEG texture output
 - Cocos2d plist, Corona/Solar2D, generic JSON, PixiJS, Phaser, and Godot metadata
@@ -81,6 +82,11 @@ are opaque; use PNG or WebP for transparent sprites. Passing
 `--pixel-format RGB888` explicitly discards Alpha and permits JPEG output. The
 project fields `imageFormat`, `webpQuality`, and `jpgQuality` provide the same
 settings. Ensure the target runtime can decode the chosen texture format.
+
+Use `--extrude N` to reserve `N` pixels around every rectangular frame and
+fill them by duplicating its edge pixels. The frame coordinates in metadata
+still describe only the original sprite. Projects use the integer `extrude`
+field. Edge extrusion is intentionally unavailable with polygon packing.
 
 Use pngquant as an optional lossy post-process when a smaller distribution
 file is more important than exact source pixels:

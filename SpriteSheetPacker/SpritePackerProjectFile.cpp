@@ -12,6 +12,7 @@ SpritePackerProjectFile::SpritePackerProjectFile() {
     _rotateSprites = false;
     _textureBorder = 0;
     _spriteBorder = 2;
+    _extrude = 0;
     _imageFormat = kPNG;
     _pixelFormat = kARGB8888;
     _premultiplied = true;
@@ -52,6 +53,7 @@ bool SpritePackerProjectFile::read(const QString &fileName) {
     if (json.contains("rotateSprites")) _rotateSprites = json["rotateSprites"].toBool();
     if (json.contains("textureBorder")) _textureBorder = json["textureBorder"].toInt();
     if (json.contains("spriteBorder")) _spriteBorder = json["spriteBorder"].toInt();
+    if (json.contains("extrude")) _extrude = json["extrude"].toInt();
     if (json.contains("imageFormat")) _imageFormat = imageFormatFromString(json["imageFormat"].toString());
     if (json.contains("pixelFormat")) _pixelFormat = pixelFormatFromString(json["pixelFormat"].toString());
     if (json.contains("premultiplied")) _premultiplied = json["premultiplied"].toBool();
@@ -105,6 +107,7 @@ bool SpritePackerProjectFile::write(const QString &fileName) {
     json["rotateSprites"] = _rotateSprites;
     json["textureBorder"] = _textureBorder;
     json["spriteBorder"] = _spriteBorder;
+    json["extrude"] = _extrude;
     json["imageFormat"] = imageFormatToString(_imageFormat);
     json["pixelFormat"] = pixelFormatToString(_pixelFormat);
     json["premultiplied"] = _premultiplied;

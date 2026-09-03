@@ -152,6 +152,48 @@ if(NOT frame_count EQUAL 1)
 endif()
 
 execute_process(
+    COMMAND "${CLI}" "${INPUT}" "${OUTPUT}"
+        --format json
+        --output-name extruded
+        --sprite-border 0
+        --extrude 2
+    RESULT_VARIABLE result
+    OUTPUT_VARIABLE stdout
+    ERROR_VARIABLE stderr
+)
+if(NOT result EQUAL 0 OR NOT EXISTS "${OUTPUT}/extruded.png")
+    message(FATAL_ERROR "Edge-extrusion smoke test failed (${result}):\n${stdout}\n${stderr}")
+endif()
+file(READ "${OUTPUT}/extruded.json" extruded_json)
+string(JSON base_frame_width GET "${json_contents}" "icon-addFolder.png" frame width)
+string(JSON base_frame_height GET "${json_contents}" "icon-addFolder.png" frame height)
+string(JSON extruded_frame_x GET "${extruded_json}" "icon-addFolder.png" frame x)
+string(JSON extruded_frame_y GET "${extruded_json}" "icon-addFolder.png" frame y)
+string(JSON extruded_frame_width GET "${extruded_json}" "icon-addFolder.png" frame width)
+string(JSON extruded_frame_height GET "${extruded_json}" "icon-addFolder.png" frame height)
+if(NOT extruded_frame_x EQUAL 2
+   OR NOT extruded_frame_y EQUAL 2
+   OR NOT extruded_frame_width EQUAL base_frame_width
+   OR NOT extruded_frame_height EQUAL base_frame_height)
+    message(FATAL_ERROR "Extrusion changed frame metadata instead of surrounding it")
+endif()
+
+execute_process(
+    COMMAND "${CLI}" "${INPUT}" "${OUTPUT}"
+        --format none
+        --output-name polygon-extruded
+        --trim-mode Polygon
+        --algorithm Polygon
+        --extrude 1
+    RESULT_VARIABLE result
+    OUTPUT_VARIABLE stdout
+    ERROR_VARIABLE stderr
+)
+if(result EQUAL 0 OR NOT stderr MATCHES "not supported with polygon packing")
+    message(FATAL_ERROR "Polygon packing did not reject edge extrusion")
+endif()
+
+execute_process(
     COMMAND "${CLI}" "${INPUT}" "${OUTPUT}" --format cocos2d --output-name smoke-plist
     RESULT_VARIABLE result
     OUTPUT_VARIABLE stdout
@@ -225,6 +267,7 @@ file(WRITE "${OUTPUT}/smoke.ssp" "{
   \"algorithm\": \"Rect\",
   \"imageFormat\": \"${project_texture_format}\",
   \"pixelFormat\": \"ARGB8888\",
+  \"extrude\": 1,
   \"pngOptMode\": \"Lossy\",
   \"pngQuantQuality\": \"80-95\",
   \"dataFormat\": \"pixijs\",
@@ -256,6 +299,11 @@ file(READ "${OUTPUT}/project-output/@1x-project.json" project_json)
 string(JSON project_frame_count LENGTH "${project_json}" frames)
 if(NOT project_frame_count EQUAL 2)
     message(FATAL_ERROR "Project srcList did not accept its mixed file/directory inputs")
+endif()
+string(JSON project_frame_x GET "${project_json}" frames "./icon-addFolder" frame x)
+string(JSON project_frame_y GET "${project_json}" frames "./icon-addFolder" frame y)
+if(project_frame_x LESS 1 OR project_frame_y LESS 1)
+    message(FATAL_ERROR "Project extrude setting was not applied")
 endif()
 string(JSON project_image GET "${project_json}" meta image)
 if(NOT project_image STREQUAL "@1x-project.${project_texture_extension}")

@@ -8,6 +8,7 @@
 
 #include <QElapsedTimer>
 #include <QImageReader>
+#include <QPainter>
 
 namespace {
 
@@ -23,6 +24,42 @@ QImage applyHeuristicMask(const QImage& source)
             }
         }
     }
+    return result;
+}
+
+QImage extrudedImage(const QImage& source, int pixels)
+{
+    if (pixels <= 0 || source.isNull()) return source;
+
+    const int width = source.width();
+    const int height = source.height();
+    QImage result(width + pixels * 2, height + pixels * 2, QImage::Format_RGBA8888);
+    result.fill(Qt::transparent);
+
+    QPainter painter(&result);
+    painter.setCompositionMode(QPainter::CompositionMode_Source);
+    painter.setRenderHint(QPainter::SmoothPixmapTransform, false);
+
+    painter.drawImage(QPoint(pixels, pixels), source);
+    painter.drawImage(QRect(pixels, 0, width, pixels), source, QRect(0, 0, width, 1));
+    painter.drawImage(QRect(pixels, pixels + height, width, pixels),
+                      source,
+                      QRect(0, height - 1, width, 1));
+    painter.drawImage(QRect(0, pixels, pixels, height), source, QRect(0, 0, 1, height));
+    painter.drawImage(QRect(pixels + width, pixels, pixels, height),
+                      source,
+                      QRect(width - 1, 0, 1, height));
+
+    painter.drawImage(QRect(0, 0, pixels, pixels), source, QRect(0, 0, 1, 1));
+    painter.drawImage(QRect(pixels + width, 0, pixels, pixels),
+                      source,
+                      QRect(width - 1, 0, 1, 1));
+    painter.drawImage(QRect(0, pixels + height, pixels, pixels),
+                      source,
+                      QRect(0, height - 1, 1, 1));
+    painter.drawImage(QRect(pixels + width, pixels + height, pixels, pixels),
+                      source,
+                      QRect(width - 1, height - 1, 1, 1));
     return result;
 }
 
@@ -100,6 +137,7 @@ SpriteAtlas::SpriteAtlas(const QStringList& sourceList, int textureBorder, int s
     , _trim(trim)
     , _textureBorder(textureBorder)
     , _spriteBorder(spriteBorder)
+    , _extrude(0)
     , _heuristicMask(heuristicMask)
     , _pow2(pow2)
     , _forceSquared(forceSquared)
@@ -127,6 +165,11 @@ bool SpriteAtlas::generate(SpriteAtlasGenerateProgress* progress) {
     _outputData.clear();
 
     _progress = progress;
+
+    if (_extrude > 0 && _algorithm == "Polygon" && _polygonMode.enable) {
+        qWarning() << "Edge extrusion is not supported with polygon packing.";
+        return false;
+    }
 
     if (_progress)
         _progress->setProgressText(QString("Optimizing sprites..."));
@@ -199,8 +242,8 @@ bool SpriteAtlas::generate(SpriteAtlasGenerateProgress* progress) {
 
         const int usableSize = _maxTextureSize - _textureBorder * 2;
         if (usableSize <= 0
-            || packContent.rect().width() + _spriteBorder > usableSize
-            || packContent.rect().height() + _spriteBorder > usableSize) {
+            || packContent.rect().width() + _extrude * 2 + _spriteBorder > usableSize
+            || packContent.rect().height() + _extrude * 2 + _spriteBorder > usableSize) {
             qWarning() << "Sprite exceeds maximum texture size:" << packContent.name();
             return false;
         }
@@ -251,11 +294,13 @@ bool SpriteAtlas::packWithRect(const QVector<PackContent>& content) {
     for (auto packContent: content) {
         int width = packContent.rect().width();
         int height = packContent.rect().height();
-        volume += width * height * 1.02f;
+        const int packedWidth = width + _extrude * 2 + _spriteBorder;
+        const int packedHeight = height + _extrude * 2 + _spriteBorder;
+        volume += packedWidth * packedHeight * 1.02f;
 
         inputContent += BinPack2D::Content<PackContent>(packContent,
                                                         BinPack2D::Coord(),
-                                                        BinPack2D::Size(width + _spriteBorder, height + _spriteBorder),
+                                                        BinPack2D::Size(packedWidth, packedHeight),
                                                         _rotateSprites,
                                                         false);
     }
@@ -479,16 +524,16 @@ bool SpriteAtlas::packWithRect(const QVector<PackContent>& content) {
         const PackContent &packContent = content.content;
         //qDebug() << packContent.mName << packContent.mRect;
 
-        // image
-        QImage image;
-        if (content.rotated) {
-            image = packContent.image().copy(packContent.rect());
-            image = rotate90(image);
-        }
+        QImage spriteImage = packContent.image().copy(packContent.rect());
+        if (content.rotated) spriteImage = rotate90(spriteImage);
+        const QImage imageWithExtrusion = extrudedImage(spriteImage, _extrude);
+        const QPoint outerPosition(content.coord.x + _textureBorder,
+                                   content.coord.y + _textureBorder);
+        const QPoint framePosition = outerPosition + QPoint(_extrude, _extrude);
 
         SpriteFrameInfo spriteFrame;
         spriteFrame.triangles = packContent.triangles();
-        spriteFrame.frame = QRect(content.coord.x + _textureBorder, content.coord.y + _textureBorder, content.size.w - _spriteBorder, content.size.h - _spriteBorder);
+        spriteFrame.frame = QRect(framePosition, spriteImage.size());
         if (spriteFrame.triangles.indices.size()) {
             spriteFrame.offset = QPoint(
                         packContent.rect().left(),
@@ -496,22 +541,14 @@ bool SpriteAtlas::packWithRect(const QVector<PackContent>& content) {
                         );
         } else {
             spriteFrame.offset = QPoint(
-                        (packContent.rect().left() + (-packContent.image().width() + content.size.w - _spriteBorder) * 0.5f),
-                        (-packContent.rect().top() + ( packContent.image().height() - content.size.h + _spriteBorder) * 0.5f)
+                        (packContent.rect().left() + (-packContent.image().width() + spriteImage.width()) * 0.5f),
+                        (-packContent.rect().top() + (packContent.image().height() - spriteImage.height()) * 0.5f)
                         );
         }
         spriteFrame.rotated = content.rotated;
         spriteFrame.sourceColorRect = packContent.rect();
         spriteFrame.sourceSize = packContent.image().size();
-        if (content.rotated) {
-            spriteFrame.frame = QRect(content.coord.x, content.coord.y, content.size.h-_spriteBorder, content.size.w-_spriteBorder);
-
-        }
-        if (content.rotated) {
-            painter.drawImage(QPoint(content.coord.x + _textureBorder, content.coord.y + _textureBorder), image);
-        } else {
-            painter.drawImage(QPoint(content.coord.x + _textureBorder, content.coord.y + _textureBorder), packContent.image(), packContent.rect());
-        }
+        painter.drawImage(outerPosition, imageWithExtrusion);
 
         outputData._spriteFrames[packContent.name()] = spriteFrame;
 

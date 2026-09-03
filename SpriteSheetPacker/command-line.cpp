@@ -22,6 +22,7 @@ struct PackOptions {
     float epsilon = 5.0f;
     int textureBorder = 0;
     int spriteBorder = 2;
+    int extrude = 0;
     bool heuristicMask = false;
     bool rotateSprites = false;
     bool powerOfTwo = false;
@@ -139,6 +140,7 @@ PackOptions optionsFromProject(const SpritePackerProjectFile& project)
     options.epsilon = project.epsilon();
     options.textureBorder = project.textureBorder();
     options.spriteBorder = project.spriteBorder();
+    options.extrude = project.extrude();
     options.heuristicMask = project.heuristicMask();
     options.rotateSprites = project.rotateSprites();
     options.dataFormat = project.dataFormat().isEmpty() ? "cocos2d" : project.dataFormat().toLower();
@@ -200,12 +202,17 @@ bool applyOverrides(const QCommandLineParser& parser, PackOptions* options, QStr
     if (!parseInteger(parser, "trim", 0, 255, &options->trim, error)
         || !parseInteger(parser, "texture-border", 0, 4096, &options->textureBorder, error)
         || !parseInteger(parser, "sprite-border", 0, 4096, &options->spriteBorder, error)
+        || !parseInteger(parser, "extrude", 0, 4096, &options->extrude, error)
         || !parseInteger(parser, "max-size", 1, 65536, &options->maxSize, error)
         || !parseInteger(parser, "png-compression", 0, 9, &options->pngCompression, error)
         || !parseInteger(parser, "webp-quality", 0, 100, &options->webpQuality, error)
         || !parseInteger(parser, "jpg-quality", 0, 100, &options->jpgQuality, error)
         || !parseFloat(parser, "epsilon", 0.0f, &options->epsilon, error)
         || !parseFloat(parser, "scale", 0.0f, &options->scale, error)) {
+        return false;
+    }
+    if (options->extrude < 0 || options->extrude > 4096) {
+        *error = "Project extrude must be an integer from 0 to 4096.";
         return false;
     }
 
@@ -223,6 +230,12 @@ bool applyOverrides(const QCommandLineParser& parser, PackOptions* options, QStr
         && options->imageFormat != kWEBP
         && options->imageFormat != kJPG) {
         *error = "Texture format must be png, webp, or jpg.";
+        return false;
+    }
+    if (options->extrude > 0
+        && options->algorithm == "Polygon"
+        && options->trimMode == "Polygon") {
+        *error = "--extrude is not supported with polygon packing.";
         return false;
     }
     const QByteArray requiredWriter = textureWriterFormat(options->imageFormat);
@@ -324,6 +337,7 @@ bool addAtlas(PublishSpriteSheet* publisher,
                       options.forceSquared,
                       options.maxSize,
                       options.scale);
+    atlas.setExtrude(options.extrude);
     atlas.setRotateSprites(options.rotateSprites);
     atlas.setAlgorithm(options.algorithm);
     if (options.trimMode == "Polygon") {
@@ -358,6 +372,7 @@ int commandLine(QCoreApplication& app)
         {"epsilon", "Polygon simplification epsilon greater than 0.", "value", "5"},
         {"texture-border", "Transparent border around each sheet.", "pixels", "0"},
         {"sprite-border", "Spacing between sprites.", "pixels", "2"},
+        {"extrude", "Duplicate sprite edge pixels outward by this amount.", "pixels", "0"},
         {{"power-of-two", "powerOf2"}, "Force power-of-two sheet dimensions."},
         {"force-squared", "Force square sheet dimensions."},
         {"heuristic-mask", "Derive transparency from the image corner color."},
