@@ -334,3 +334,21 @@ string(JSON override_frame_y GET "${override_json}" frames "./icon-addFolder" fr
 if(NOT override_frame_x EQUAL 0 OR NOT override_frame_y EQUAL 0)
     message(FATAL_ERROR "Explicit --extrude did not override project extrudeRules")
 endif()
+
+execute_process(
+    COMMAND "${CLI}" "${OUTPUT}/smoke.ssp" "${OUTPUT}/project-corona2"
+        --format corona2
+        --extrude 0
+    RESULT_VARIABLE result
+    OUTPUT_VARIABLE stdout
+    ERROR_VARIABLE stderr
+)
+if(NOT result EQUAL 0)
+    message(FATAL_ERROR "Mixed-source corona2 export failed (${result}):\n${stdout}\n${stderr}")
+endif()
+file(READ "${OUTPUT}/project-corona2/@1x-project.json" mixed_corona2_json)
+string(JSON mixed_file_index GET "${mixed_corona2_json}" frameIndex "icon-addFolder")
+string(JSON mixed_directory_index GET "${mixed_corona2_json}" frameIndex "nested/anim/walk")
+if(mixed_file_index LESS 1 OR mixed_directory_index LESS 1)
+    message(FATAL_ERROR "corona2 did not preserve mixed file/directory logical paths")
+endif()

@@ -30,15 +30,25 @@ QString exportedName(QString name, bool trimSpriteNames, bool prependSmartFolder
     return name;
 }
 
-QMap<QString, SpriteFrameInfo> exportedFrames(const QMap<QString, SpriteFrameInfo>& frames,
-                                               bool trimSpriteNames,
-                                               bool prependSmartFolderName)
+bool exportedFrames(const QMap<QString, SpriteFrameInfo>& frames,
+                    bool trimSpriteNames,
+                    bool prependSmartFolderName,
+                    QMap<QString, SpriteFrameInfo>* result,
+                    QString* errorMessage)
 {
-    QMap<QString, SpriteFrameInfo> result;
+    result->clear();
     for (auto it = frames.cbegin(); it != frames.cend(); ++it) {
-        result.insert(exportedName(it.key(), trimSpriteNames, prependSmartFolderName), it.value());
+        const QString name = exportedName(it.key(), trimSpriteNames, prependSmartFolderName);
+        if (result->contains(name)) {
+            if (errorMessage) {
+                *errorMessage = QString("Multiple source images produce the frame name '%1'.")
+                    .arg(name);
+            }
+            return false;
+        }
+        result->insert(name, it.value());
     }
-    return result;
+    return true;
 }
 
 QJsonObject rectJson(const QRect& rect, bool shortSizeNames = false)
@@ -69,42 +79,39 @@ QString coronaFileName(const QString& filePath)
     return QDir::fromNativeSeparators(filePath).section('/', -1);
 }
 
-QString coronaFileNameWithoutExtension(const QString& filePath)
+QString coronaFrameName(QString key, bool keepPath)
 {
-    QString fileName = coronaFileName(filePath);
-    fileName.remove(QRegularExpression("\\.[^.]+$"));
-    return fileName;
+    if (!keepPath) return coronaFileName(key);
+
+    key = QDir::fromNativeSeparators(key);
+    while (key.startsWith("./")) key.remove(0, 2);
+    key.remove(QRegularExpression("\\.[^./]+$"));
+    return key;
 }
 
-QString coronaFileDirectory(const QString& filePath)
-{
-    const QString normalized = QDir::fromNativeSeparators(filePath);
-    const QString fileName = coronaFileName(normalized);
-    const qsizetype length = qMax<qsizetype>(0, normalized.size() - fileName.size() - 1);
-    return normalized.left(length);
-}
-
-QString coronaFrameName(const QString& key, bool keepParentFolder)
-{
-    if (!keepParentFolder) return coronaFileName(key);
-
-    QString name = coronaFileNameWithoutExtension(coronaFileDirectory(key))
-                 + "/" + coronaFileNameWithoutExtension(key);
-    if (name == key) name = coronaFileNameWithoutExtension(key);
-    return name;
-}
-
-QByteArray exportCorona(const QMap<QString, SpriteFrameInfo>& frames,
-                        const QSize& textureSize,
-                        bool keepParentFolder)
+bool exportCorona(const QMap<QString, SpriteFrameInfo>& frames,
+                  const QSize& textureSize,
+                  bool keepPath,
+                  QByteArray* output,
+                  QString* errorMessage)
 {
     QJsonArray jsonFrames;
     QJsonObject frameIndex;
+    QSet<QString> frameNames;
     int index = 1;
 
     for (auto it = frames.cbegin(); it != frames.cend(); ++it) {
         const SpriteFrameInfo& frame = it.value();
-        const QString name = coronaFrameName(it.key(), keepParentFolder);
+        const QString name = coronaFrameName(it.key(), keepPath);
+        if (frameNames.contains(name)) {
+            if (errorMessage) {
+                *errorMessage = QString("Multiple source images produce the Corona frame name '%1'.")
+                    .arg(name);
+            }
+            return false;
+        }
+        frameNames.insert(name);
+
         QJsonObject value{
             {"x", frame.frame.x()},
             {"y", frame.frame.y()},
@@ -122,12 +129,12 @@ QByteArray exportCorona(const QMap<QString, SpriteFrameInfo>& frames,
         {"sheetContentHeight", textureSize.height()},
         {"frames", jsonFrames}
     };
-    QByteArray data = QJsonDocument(QJsonObject{
+    *output = QJsonDocument(QJsonObject{
         {"sheet", sheet},
         {"frameIndex", frameIndex}
     }).toJson(QJsonDocument::Compact);
-    if (data.endsWith('\n')) data.chop(1);
-    return data;
+    if (output->endsWith('\n')) output->chop(1);
+    return true;
 }
 
 QByteArray exportSimpleJson(const QMap<QString, SpriteFrameInfo>& frames)
@@ -341,14 +348,26 @@ bool DataExporter::exportData(const QString& format,
                               QString* errorMessage)
 {
     if (!result) return false;
-    const QMap<QString, SpriteFrameInfo> frames = exportedFrames(
-        spriteFrames, trimSpriteNames, prependSmartFolderName);
+    QMap<QString, SpriteFrameInfo> frames;
+    if (!exportedFrames(spriteFrames,
+                        trimSpriteNames,
+                        prependSmartFolderName,
+                        &frames,
+                        errorMessage)) {
+        return false;
+    }
 
     if (format == "json") {
         result->data = exportSimpleJson(frames);
         result->extension = "json";
     } else if (format == "corona" || format == "corona2") {
-        result->data = exportCorona(frames, textureSize, format == "corona2");
+        if (!exportCorona(frames,
+                          textureSize,
+                          format == "corona2",
+                          &result->data,
+                          errorMessage)) {
+            return false;
+        }
         result->extension = "json";
     } else if (format == "pixijs") {
         result->data = exportPixi(imageFilePath, frames);

@@ -129,7 +129,12 @@ base file names. Avoid duplicate final frame names.
 
 The two Corona/Solar2D formats produce the same compact JSON structure but use
 different frame names: `corona` keeps only the sprite file name, while
-`corona2` keeps `direct-parent/file-name` and removes extensions.
+`corona2` preserves the normalized logical source path and removes extensions.
+For mixed `srcList` input, directory entries retain their directory namespace
+and hierarchy; individually listed files are placed at the logical root using
+their base names. Set `prependSmartFolderName` to `false` to remove the first
+directory component. Inputs that produce the same logical frame name are
+rejected instead of silently overwriting one another.
 
 Legacy embedded optipng/libimagequant code and PVRTexTool-based PVR/PKM output
 are intentionally excluded; pngquant support invokes the external executable

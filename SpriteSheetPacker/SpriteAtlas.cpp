@@ -248,6 +248,7 @@ bool SpriteAtlas::generate(SpriteAtlasGenerateProgress* progress) {
 
     int progressIndex = 1;
     QVector<PackContent> inputContent;
+    QSet<QString> sourceNames;
     auto it_f = fileList.begin();
     for(; it_f != fileList.end(); ++it_f, ++progressIndex) {
         if (_aborted) return false;
@@ -267,6 +268,12 @@ bool SpriteAtlas::generate(SpriteAtlasGenerateProgress* progress) {
         }
 
         PackContent packContent((*it_f).second, image);
+        if (sourceNames.contains(packContent.name())) {
+            qWarning() << "Duplicate source frame name:" << packContent.name();
+            return false;
+        }
+        sourceNames.insert(packContent.name());
+
         int extrusion = _extrude;
         const QString rulePath = normalizedRulePath(packContent.name());
         for (const auto& rule : extrudeRules) {
