@@ -288,7 +288,11 @@ file(WRITE "${OUTPUT}/smoke.ssp" "{
     \"maxTextureSize\": 1024,
     \"pow2\": true,
     \"forceSquared\": true
-  }]
+  }],
+  \"textureScaleVariants\": [
+    {\"scale\": 0.75, \"suffix\": \"@1080p\"},
+    {\"scale\": 0.5, \"suffix\": \"@other\"}
+  ]
 }")
 
 execute_process(
@@ -299,8 +303,66 @@ execute_process(
 )
 if(NOT result EQUAL 0
    OR NOT EXISTS "${OUTPUT}/project-output/@1x-project.${project_texture_extension}"
+   OR NOT EXISTS "${OUTPUT}/project-output/@1x-project@1080p.${project_texture_extension}"
+   OR NOT EXISTS "${OUTPUT}/project-output/@1x-project@other.${project_texture_extension}"
    OR NOT EXISTS "${OUTPUT}/project-output/@1x-project.json")
     message(FATAL_ERROR "Project smoke test failed (${result}):\n${stdout}\n${stderr}")
+endif()
+if(EXISTS "${OUTPUT}/project-output/@1x-project@1080p.json"
+   OR EXISTS "${OUTPUT}/project-output/@1x-project@other.json")
+    message(FATAL_ERROR "textureScaleVariants unexpectedly generated metadata files")
+endif()
+
+foreach(texture_variant IN ITEMS "@1x-project" "@1x-project@1080p" "@1x-project@other")
+    execute_process(
+        COMMAND "${CLI}"
+            "${OUTPUT}/project-output/${texture_variant}.${project_texture_extension}"
+            "${OUTPUT}/variant-inspection"
+            --format json
+            --output-name "${texture_variant}"
+            --trim 0
+        RESULT_VARIABLE result
+        OUTPUT_VARIABLE stdout
+        ERROR_VARIABLE stderr
+    )
+    if(NOT result EQUAL 0)
+        message(FATAL_ERROR "Cannot inspect texture variant ${texture_variant} (${result}):\n${stdout}\n${stderr}")
+    endif()
+    file(READ "${OUTPUT}/variant-inspection/${texture_variant}.json" texture_variant_json)
+    string(JSON texture_variant_width GET "${texture_variant_json}"
+        "${texture_variant}.${project_texture_extension}" sourceSize width)
+    string(JSON texture_variant_height GET "${texture_variant_json}"
+        "${texture_variant}.${project_texture_extension}" sourceSize height)
+    if(texture_variant STREQUAL "@1x-project")
+        set(base_texture_width ${texture_variant_width})
+        set(base_texture_height ${texture_variant_height})
+    elseif(texture_variant STREQUAL "@1x-project@1080p")
+        set(texture_1080p_width ${texture_variant_width})
+        set(texture_1080p_height ${texture_variant_height})
+    else()
+        set(texture_other_width ${texture_variant_width})
+        set(texture_other_height ${texture_variant_height})
+    endif()
+endforeach()
+math(EXPR expected_1080p_width "(${base_texture_width} * 3 + 2) / 4")
+math(EXPR expected_1080p_height "(${base_texture_height} * 3 + 2) / 4")
+math(EXPR expected_other_width "(${base_texture_width} + 1) / 2")
+math(EXPR expected_other_height "(${base_texture_height} + 1) / 2")
+if(NOT texture_1080p_width EQUAL expected_1080p_width
+   OR NOT texture_1080p_height EQUAL expected_1080p_height
+   OR NOT texture_other_width EQUAL expected_other_width
+   OR NOT texture_other_height EQUAL expected_other_height)
+    message(FATAL_ERROR "textureScaleVariants did not scale the completed scale=1 atlas")
+endif()
+
+execute_process(
+    COMMAND "${CLI}" "${OUTPUT}/smoke.ssp" "${OUTPUT}/project-no-unit-scale" --scale 0.5
+    RESULT_VARIABLE result
+    OUTPUT_VARIABLE stdout
+    ERROR_VARIABLE stderr
+)
+if(result EQUAL 0 OR NOT stderr MATCHES "require exactly one scale=1 atlas output")
+    message(FATAL_ERROR "textureScaleVariants did not reject a project without a scale=1 atlas")
 endif()
 
 file(READ "${OUTPUT}/project-output/@1x-project.json" project_json)

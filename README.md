@@ -65,6 +65,27 @@ An explicit destination overrides the one stored in a project:
 build/sprite-sheet-packer path/to/project.ssp path/to/output
 ```
 
+To create additional texture sizes without repacking sprites or exporting more
+metadata, add `textureScaleVariants` to a project:
+
+```json
+{
+  "textureScaleVariants": [
+    {"scale": 0.75, "suffix": "@1080p"},
+    {"scale": 0.5, "suffix": "@other"}
+  ]
+}
+```
+
+For a base output named `atlas.png`, this writes `atlas@1080p.png` and
+`atlas@other.png` beside it. Only the completed scale-1 atlas image is resized;
+the layout is not regenerated and no metadata is written for these additional
+textures. Exactly one effective scale-1 atlas must exist. Dimensions are
+rounded to the nearest pixel, and every variant uses the selected texture
+format, quality settings, and optional pngquant processing. For multi-page
+output, the suffix is appended to each final page stem, such as
+`atlas_0@1080p.png`.
+
 Run `sprite-sheet-packer --help` for all packing options, or
 `sprite-sheet-packer --list-formats` for the built-in metadata formats.
 `sprite-sheet-packer --list-image-formats` reports the input formats currently

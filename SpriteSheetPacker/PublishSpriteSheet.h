@@ -7,6 +7,7 @@
 
 #include "ImageFormat.h"
 #include "SpriteAtlas.h"
+#include "TextureScaleVariant.h"
 
 class PublishSpriteSheet
 {
@@ -27,10 +28,18 @@ public:
         _pngQuantEnabled = enabled;
         _pngQuantQuality = quality;
     }
+    void setTextureScaleVariants(const QVector<TextureScaleVariant>& variants)
+    {
+        _textureScaleVariants = variants;
+    }
 
     bool publish(const QString& format, QString* errorMessage = nullptr);
 
 private:
+    bool writeTexture(const QImage& image,
+                      const QString& imageFilePath,
+                      QString* errorMessage);
+
     QList<SpriteAtlas> _spriteAtlases;
     QStringList _fileNames;
     ImageFormat _imageFormat;
@@ -43,6 +52,7 @@ private:
     int _jpgQuality;
     bool _pngQuantEnabled;
     QString _pngQuantQuality;
+    QVector<TextureScaleVariant> _textureScaleVariants;
 };
 
 #endif

@@ -3,6 +3,7 @@
 
 #include <QtCore>
 #include "ImageFormat.h"
+#include "TextureScaleVariant.h"
 
 struct ScalingVariant{
     QString name;
@@ -79,6 +80,9 @@ public:
     void setScalingVariants(const QVector<ScalingVariant>& scalingVariants) { _scalingVariants = scalingVariants; }
     const QVector<ScalingVariant>& scalingVariants() const { return _scalingVariants; }
 
+    void setTextureScaleVariants(const QVector<TextureScaleVariant>& variants) { _textureScaleVariants = variants; }
+    const QVector<TextureScaleVariant>& textureScaleVariants() const { return _textureScaleVariants; }
+
     void setDataFormat(const QString& dataFormat) { _dataFormat = dataFormat; }
     const QString& dataFormat() const { return _dataFormat; }
 
@@ -127,6 +131,7 @@ protected:
     int         _jpgQuality;
 
     QVector<ScalingVariant> _scalingVariants;
+    QVector<TextureScaleVariant> _textureScaleVariants;
 
     QString     _dataFormat;
     QString     _destPath;

@@ -94,6 +94,16 @@ bool SpritePackerProjectFile::read(const QString &fileName) {
         _scalingVariants.push_back(scalingVariant);
     }
 
+    _textureScaleVariants.clear();
+    const QJsonArray textureScaleVariants = json["textureScaleVariants"].toArray();
+    for (const QJsonValue& value : textureScaleVariants) {
+        const QJsonObject object = value.toObject();
+        TextureScaleVariant variant;
+        variant.scale = object["scale"].toDouble(-1.0);
+        variant.suffix = object["suffix"].toString();
+        _textureScaleVariants.append(variant);
+    }
+
     if (json.contains("dataFormat"))  _dataFormat = json["dataFormat"].toString();
     if (json.contains("destPath")) _destPath = QDir(dir.absoluteFilePath(json["destPath"].toString())).absolutePath();
     if (json.contains("spriteSheetName")) _spriteSheetName = json["spriteSheetName"].toString();
@@ -162,6 +172,14 @@ bool SpritePackerProjectFile::write(const QString &fileName) {
         scalingVariants.append(scalingVariantObject);
     }
     json["scalingVariants"] = scalingVariants;
+    QJsonArray textureScaleVariants;
+    for (const TextureScaleVariant& variant : _textureScaleVariants) {
+        textureScaleVariants.append(QJsonObject{
+            {"scale", variant.scale},
+            {"suffix", variant.suffix}
+        });
+    }
+    json["textureScaleVariants"] = textureScaleVariants;
     json["dataFormat"] = _dataFormat;
     json["destPath"] = dir.relativeFilePath(_destPath);
     json["spriteSheetName"] = _spriteSheetName;

@@ -518,6 +518,9 @@ int commandLine(QCoreApplication& app)
     publisher.setWebpQuality(options.webpQuality);
     publisher.setJpgQuality(options.jpgQuality);
     publisher.setPngQuant(options.pngQuant, options.pngQuantQuality);
+    if (project) {
+        publisher.setTextureScaleVariants(project->textureScaleVariants());
+    }
 
     if (project) {
         QVector<ScalingVariant> variants = project->scalingVariants();
