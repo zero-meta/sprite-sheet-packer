@@ -24,6 +24,8 @@ struct PackOptions {
     int spriteBorder = 2;
     int extrude = 0;
     QVector<QPair<QString, int>> extrudeRules;
+    float outlineCoarseness = 0.0f;
+    QVector<QPair<QString, float>> outlineRules;
     bool heuristicMask = false;
     bool rotateSprites = false;
     bool powerOfTwo = false;
@@ -143,6 +145,8 @@ PackOptions optionsFromProject(const SpritePackerProjectFile& project)
     options.spriteBorder = project.spriteBorder();
     options.extrude = project.extrude();
     options.extrudeRules = project.extrudeRules();
+    options.outlineCoarseness = project.outlineCoarseness();
+    options.outlineRules = project.outlineRules();
     options.heuristicMask = project.heuristicMask();
     options.rotateSprites = project.rotateSprites();
     options.dataFormat = project.dataFormat().isEmpty() ? "cocos2d" : project.dataFormat().toLower();
@@ -224,6 +228,35 @@ bool applyOverrides(const QCommandLineParser& parser, PackOptions* options, QStr
         }
     }
     if (parser.isSet("extrude")) options->extrudeRules.clear();
+
+    if (parser.isSet("outline-coarseness")) {
+        bool ok = false;
+        const float value = parser.value("outline-coarseness").toFloat(&ok);
+        if (!ok || !qIsFinite(value)
+            || value < 0.0f || (value > 0.0f && value < 1.0f) || value > 4096.0f) {
+            *error = "--outline-coarseness must be 0 (disabled) or from 1 to 4096.";
+            return false;
+        }
+        options->outlineCoarseness = value;
+    }
+    if (!qIsFinite(options->outlineCoarseness)
+        || options->outlineCoarseness < 0.0f
+        || (options->outlineCoarseness > 0.0f && options->outlineCoarseness < 1.0f)
+        || options->outlineCoarseness > 4096.0f) {
+        *error = "Project outlineCoarseness must be 0 (disabled) or from 1 to 4096.";
+        return false;
+    }
+    for (const auto& rule : options->outlineRules) {
+        if (rule.first.trimmed().isEmpty()
+            || !qIsFinite(rule.second)
+            || rule.second < 0.0f
+            || (rule.second > 0.0f && rule.second < 1.0f)
+            || rule.second > 4096.0f) {
+            *error = "Project outlineRules require a non-empty pattern and coarseness of 0 or from 1 to 4096.";
+            return false;
+        }
+    }
+    if (parser.isSet("outline-coarseness")) options->outlineRules.clear();
 
     if (parser.isSet("power-of-two")) options->powerOfTwo = true;
     if (parser.isSet("force-squared")) options->forceSquared = true;
@@ -352,6 +385,8 @@ bool addAtlas(PublishSpriteSheet* publisher,
                       options.scale);
     atlas.setExtrude(options.extrude);
     atlas.setExtrudeRules(options.extrudeRules);
+    atlas.setOutlineCoarseness(options.outlineCoarseness);
+    atlas.setOutlineRules(options.outlineRules);
     atlas.setRotateSprites(options.rotateSprites);
     atlas.setAlgorithm(options.algorithm);
     if (options.trimMode == "Polygon") {
@@ -387,6 +422,7 @@ int commandLine(QCoreApplication& app)
         {"texture-border", "Transparent border around each sheet.", "pixels", "0"},
         {"sprite-border", "Spacing between sprites.", "pixels", "2"},
         {"extrude", "Duplicate sprite edge pixels outward by this amount.", "pixels", "0"},
+        {"outline-coarseness", "Generate Corona outline points; 0 disables it.", "pixels", "0"},
         {{"power-of-two", "powerOf2"}, "Force power-of-two sheet dimensions."},
         {"force-squared", "Force square sheet dimensions."},
         {"heuristic-mask", "Derive transparency from the image corner color."},

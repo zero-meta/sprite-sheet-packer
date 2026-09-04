@@ -13,6 +13,7 @@ SpritePackerProjectFile::SpritePackerProjectFile() {
     _textureBorder = 0;
     _spriteBorder = 2;
     _extrude = 0;
+    _outlineCoarseness = 0;
     _imageFormat = kPNG;
     _pixelFormat = kARGB8888;
     _premultiplied = true;
@@ -59,6 +60,16 @@ bool SpritePackerProjectFile::read(const QString &fileName) {
     for (const QJsonValue& value : extrudeRules) {
         const QJsonObject rule = value.toObject();
         _extrudeRules.append({rule["pattern"].toString(), rule["pixels"].toInt(-1)});
+    }
+    if (json.contains("outlineCoarseness")) {
+        _outlineCoarseness = json["outlineCoarseness"].toDouble(-1.0);
+    }
+    _outlineRules.clear();
+    const QJsonArray outlineRules = json["outlineRules"].toArray();
+    for (const QJsonValue& value : outlineRules) {
+        const QJsonObject rule = value.toObject();
+        _outlineRules.append({rule["pattern"].toString(),
+                              static_cast<float>(rule["coarseness"].toDouble(-1.0))});
     }
     if (json.contains("imageFormat")) _imageFormat = imageFormatFromString(json["imageFormat"].toString());
     if (json.contains("pixelFormat")) _pixelFormat = pixelFormatFromString(json["pixelFormat"].toString());
@@ -122,6 +133,15 @@ bool SpritePackerProjectFile::write(const QString &fileName) {
         });
     }
     json["extrudeRules"] = extrudeRules;
+    json["outlineCoarseness"] = _outlineCoarseness;
+    QJsonArray outlineRules;
+    for (const auto& rule : _outlineRules) {
+        outlineRules.append(QJsonObject{
+            {"pattern", rule.first},
+            {"coarseness", rule.second}
+        });
+    }
+    json["outlineRules"] = outlineRules;
     json["imageFormat"] = imageFormatToString(_imageFormat);
     json["pixelFormat"] = pixelFormatToString(_pixelFormat);
     json["premultiplied"] = _premultiplied;

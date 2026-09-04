@@ -47,6 +47,11 @@ public:
     void setExtrudeRules(const QVector<QPair<QString, int>>& rules) { _extrudeRules = rules; }
     const QVector<QPair<QString, int>>& extrudeRules() const { return _extrudeRules; }
 
+    void setOutlineCoarseness(float value) { _outlineCoarseness = value; }
+    float outlineCoarseness() const { return _outlineCoarseness; }
+    void setOutlineRules(const QVector<QPair<QString, float>>& rules) { _outlineRules = rules; }
+    const QVector<QPair<QString, float>>& outlineRules() const { return _outlineRules; }
+
     void setImageFormat(ImageFormat imageFormat) { _imageFormat = imageFormat; }
     ImageFormat imageFormat() const { return _imageFormat; }
 
@@ -109,6 +114,8 @@ protected:
     int         _spriteBorder;
     int         _extrude;
     QVector<QPair<QString, int>> _extrudeRules;
+    float       _outlineCoarseness;
+    QVector<QPair<QString, float>> _outlineRules;
     ImageFormat _imageFormat;
     PixelFormat _pixelFormat;
     bool        _premultiplied;

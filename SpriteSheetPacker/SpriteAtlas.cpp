@@ -4,6 +4,7 @@
 #include "binpack2d.hpp"
 #include "polypack2d.h"
 #include "ImageRotate.h"
+#include "OutlineGenerator.h"
 #include "PolygonImage.h"
 
 #include <QElapsedTimer>
@@ -176,6 +177,7 @@ SpriteAtlas::SpriteAtlas(const QStringList& sourceList, int textureBorder, int s
     , _textureBorder(textureBorder)
     , _spriteBorder(spriteBorder)
     , _extrude(0)
+    , _outlineCoarseness(0.0f)
     , _heuristicMask(heuristicMask)
     , _pow2(pow2)
     , _forceSquared(forceSquared)
@@ -201,6 +203,7 @@ bool SpriteAtlas::generate(SpriteAtlasGenerateProgress* progress) {
     timePerform.start();
 
     _outputData.clear();
+    _outlines.clear();
 
     _progress = progress;
 
@@ -211,6 +214,11 @@ bool SpriteAtlas::generate(SpriteAtlasGenerateProgress* progress) {
     extrudeRules.reserve(_extrudeRules.size());
     for (const auto& rule : _extrudeRules) {
         extrudeRules.append({globExpression(rule.first), rule.second});
+    }
+    QVector<QPair<QRegularExpression, float>> outlineRules;
+    outlineRules.reserve(_outlineRules.size());
+    for (const auto& rule : _outlineRules) {
+        outlineRules.append({globExpression(rule.first), rule.second});
     }
 
     QStringList nameFilter;
@@ -249,6 +257,7 @@ bool SpriteAtlas::generate(SpriteAtlasGenerateProgress* progress) {
     int progressIndex = 1;
     QVector<PackContent> inputContent;
     QSet<QString> sourceNames;
+    QMap<QString, float> outlineRequests;
     auto it_f = fileList.begin();
     for(; it_f != fileList.end(); ++it_f, ++progressIndex) {
         if (_aborted) return false;
@@ -281,6 +290,13 @@ bool SpriteAtlas::generate(SpriteAtlasGenerateProgress* progress) {
         }
         packContent.setExtrude(extrusion);
         qDebug() << "extrude:" << packContent.name() << extrusion;
+
+        float outlineCoarseness = _outlineCoarseness;
+        for (const auto& rule : outlineRules) {
+            if (rule.first.match(rulePath).hasMatch()) outlineCoarseness = rule.second;
+        }
+        outlineRequests.insert(packContent.name(), outlineCoarseness);
+        qDebug() << "outline coarseness:" << packContent.name() << outlineCoarseness;
 
         // Trim / Crop
         if (_trim) {
@@ -325,6 +341,40 @@ bool SpriteAtlas::generate(SpriteAtlasGenerateProgress* progress) {
     }
     if (skipSprites)
         qDebug() << "Total skip sprites: " << skipSprites;
+
+    for (const PackContent& content : inputContent) {
+        QVector<QPair<float, QVector<QPoint>>> generated;
+        auto generateForName = [&](const QString& name) {
+            const float coarseness = outlineRequests.value(name, 0.0f);
+            if (coarseness <= 0.0f) return;
+
+            const QVector<QPoint>* outline = nullptr;
+            for (const auto& cached : generated) {
+                if (cached.first == coarseness) {
+                    outline = &cached.second;
+                    break;
+                }
+            }
+            if (!outline) {
+                generated.append({coarseness,
+                                  OutlineGenerator::generate(content.image(),
+                                                             content.rect(),
+                                                             coarseness)});
+                outline = &generated.last().second;
+            }
+            if (outline->size() >= 3) {
+                _outlines.insert(name, *outline);
+            } else {
+                qDebug() << "outline omitted (fewer than 3 points):" << name;
+            }
+        };
+
+        generateForName(content.name());
+        const auto identicalIt = _identicalFrames.constFind(content.name());
+        if (identicalIt != _identicalFrames.cend()) {
+            for (const QString& name : identicalIt.value()) generateForName(name);
+        }
+    }
 
     if (_algorithm == "Polygon" && _polygonMode.enable) {
         for (const PackContent& content : inputContent) {
@@ -612,6 +662,7 @@ bool SpriteAtlas::packWithRect(const QVector<PackContent>& content) {
         spriteFrame.rotated = content.rotated;
         spriteFrame.sourceColorRect = packContent.rect();
         spriteFrame.sourceSize = packContent.image().size();
+        spriteFrame.outline = _outlines.value(packContent.name());
         painter.drawImage(outerPosition, imageWithExtrusion);
 
         outputData._spriteFrames[packContent.name()] = spriteFrame;
@@ -621,7 +672,9 @@ bool SpriteAtlas::packWithRect(const QVector<PackContent>& content) {
         if (identicalIt != _identicalFrames.end()) {
             QStringList identicalList;
             for (auto ident: (*identicalIt)) {
-                outputData._spriteFrames[ident] = spriteFrame;
+                SpriteFrameInfo identicalFrame = spriteFrame;
+                identicalFrame.outline = _outlines.value(ident);
+                outputData._spriteFrames[ident] = identicalFrame;
 
                 identicalList.push_back(ident);
             }
@@ -688,6 +741,7 @@ bool SpriteAtlas::packWithPolygon(const QVector<PackContent>& content) {
         spriteFrame.rotated = false;
         spriteFrame.sourceColorRect = packContent.rect();
         spriteFrame.sourceSize = packContent.image().size();
+        spriteFrame.outline = _outlines.value(packContent.name());
 
         QPainterPath clipPath;
         for (const auto& polygon: packContent.polygons()) {
@@ -707,7 +761,9 @@ bool SpriteAtlas::packWithPolygon(const QVector<PackContent>& content) {
         if (identicalIt != _identicalFrames.end()) {
             QStringList identicalList;
             for (auto ident: (*identicalIt)) {
-                outputData._spriteFrames[ident] = spriteFrame;
+                SpriteFrameInfo identicalFrame = spriteFrame;
+                identicalFrame.outline = _outlines.value(ident);
+                outputData._spriteFrames[ident] = identicalFrame;
 
                 identicalList.push_back(ident);
             }

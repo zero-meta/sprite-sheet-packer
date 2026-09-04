@@ -9,6 +9,7 @@ are not part of the build.
 - Rectangular and polygon packing
 - Trimming, scaling, rotation, borders, power-of-two and square sheets
 - Optional edge-pixel extrusion for repeat sampling with linear filtering
+- Optional per-frame alpha outlines for Corona/Solar2D
 - Multiple sheets and project scaling variants
 - PNG, WebP, and JPEG texture output
 - Cocos2d plist, Corona/Solar2D, generic JSON, PixiJS, Phaser, and Godot metadata
@@ -105,6 +106,29 @@ match wins. An explicit `--extrude N`, including `--extrude 0`, overrides all
 project rules. If identical images use different values, their shared packed
 frame uses the largest extrusion. Edge extrusion is intentionally unavailable
 with polygon packing.
+
+Corona and Corona2 metadata can optionally include a clockwise alpha outline
+for selected frames. Set a global simplification distance with
+`--outline-coarseness N`, or configure ordered project rules:
+
+```json
+{
+  "outlineCoarseness": 0,
+  "outlineRules": [
+    {"pattern": "scene_build/material/**", "coarseness": 3},
+    {"pattern": "scene_build/skins/textures/**", "coarseness": 3}
+  ]
+}
+```
+
+Outline rules use the same normalized glob matching and last-match-wins
+behavior as `extrudeRules`. A coarseness of `0` disables generation. An
+explicit `--outline-coarseness N`, including `0`, replaces all project rules.
+The exported flat `outline` array contains `x, y` pairs relative to the
+trimmed, unrotated frame; extrusion and atlas placement do not change these
+coordinates. Alpha values greater than zero are solid. As with Solar2D's
+outline generator, only the first connected opaque region is traced and holes
+are ignored. Outlines are regenerated after each scaling variant is applied.
 
 Use pngquant as an optional lossy post-process when a smaller distribution
 file is more important than exact source pixels:

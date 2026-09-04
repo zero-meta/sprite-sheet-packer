@@ -14,6 +14,7 @@ qt_add_executable(sprite-sheet-packer
     SpriteSheetPacker/DataExporter.cpp
     SpriteSheetPacker/PublishSpriteSheet.cpp
     SpriteSheetPacker/SpriteAtlas.cpp
+    SpriteSheetPacker/OutlineGenerator.cpp
     SpriteSheetPacker/SpritePackerProjectFile.cpp
     SpriteSheetPacker/PolygonImage.cpp
     SpriteSheetPacker/algorithm/polypack2d.cpp

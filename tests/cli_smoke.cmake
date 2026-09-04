@@ -272,6 +272,10 @@ file(WRITE "${OUTPUT}/smoke.ssp" "{
     {\"pattern\": \"**/*.png\", \"pixels\": 1},
     {\"pattern\": \"nested/**\", \"pixels\": 3}
   ],
+  \"outlineCoarseness\": 0,
+  \"outlineRules\": [
+    {\"pattern\": \"nested/**\", \"coarseness\": 2}
+  ],
   \"pngOptMode\": \"Lossy\",
   \"pngQuantQuality\": \"80-95\",
   \"dataFormat\": \"pixijs\",
@@ -351,4 +355,43 @@ string(JSON mixed_file_index GET "${mixed_corona2_json}" frameIndex "icon-addFol
 string(JSON mixed_directory_index GET "${mixed_corona2_json}" frameIndex "nested/anim/walk")
 if(mixed_file_index LESS 1 OR mixed_directory_index LESS 1)
     message(FATAL_ERROR "corona2 did not preserve mixed file/directory logical paths")
+endif()
+
+math(EXPR mixed_file_frame "${mixed_file_index} - 1")
+math(EXPR mixed_directory_frame "${mixed_directory_index} - 1")
+string(JSON mixed_file_outline ERROR_VARIABLE mixed_file_outline_error
+    GET "${mixed_corona2_json}" sheet frames ${mixed_file_frame} outline)
+string(JSON mixed_directory_outline ERROR_VARIABLE mixed_directory_outline_error
+    GET "${mixed_corona2_json}" sheet frames ${mixed_directory_frame} outline)
+if(mixed_file_outline_error STREQUAL "NOTFOUND")
+    message(FATAL_ERROR "outlineRules unexpectedly generated an outline for the unmatched file")
+endif()
+if(NOT mixed_directory_outline_error STREQUAL "NOTFOUND")
+    message(FATAL_ERROR "outlineRules did not generate an outline for the matched directory frame")
+endif()
+string(JSON mixed_directory_outline_length LENGTH "${mixed_directory_outline}")
+math(EXPR mixed_directory_outline_remainder "${mixed_directory_outline_length} % 2")
+if(mixed_directory_outline_length LESS 6 OR NOT mixed_directory_outline_remainder EQUAL 0)
+    message(FATAL_ERROR "Generated outline does not contain at least three coordinate pairs")
+endif()
+
+execute_process(
+    COMMAND "${CLI}" "${OUTPUT}/smoke.ssp" "${OUTPUT}/project-outline-override"
+        --format corona2
+        --extrude 0
+        --outline-coarseness 0
+    RESULT_VARIABLE result
+    OUTPUT_VARIABLE stdout
+    ERROR_VARIABLE stderr
+)
+if(NOT result EQUAL 0)
+    message(FATAL_ERROR "Project outline override failed (${result}):\n${stdout}\n${stderr}")
+endif()
+file(READ "${OUTPUT}/project-outline-override/@1x-project.json" outline_override_json)
+string(JSON outline_override_index GET "${outline_override_json}" frameIndex "nested/anim/walk")
+math(EXPR outline_override_frame "${outline_override_index} - 1")
+string(JSON outline_override_value ERROR_VARIABLE outline_override_error
+    GET "${outline_override_json}" sheet frames ${outline_override_frame} outline)
+if(outline_override_error STREQUAL "NOTFOUND")
+    message(FATAL_ERROR "Explicit --outline-coarseness 0 did not override project outlineRules")
 endif()
