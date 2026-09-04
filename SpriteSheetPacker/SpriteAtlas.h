@@ -4,6 +4,7 @@
 #include <QtCore>
 #include <QImage>
 
+#include "OutlineRule.h"
 #include "PolygonImage.h"
 
 struct SpriteFrameInfo {
@@ -14,6 +15,7 @@ public:
     QRect   sourceColorRect;
     QSize   sourceSize;
     QVector<QPoint> outline;
+    bool outlineCentered = false;
 
     Triangles triangles;
 };
@@ -79,7 +81,12 @@ public:
     void setExtrude(int pixels) { _extrude = pixels; }
     void setExtrudeRules(const QVector<QPair<QString, int>>& rules) { _extrudeRules = rules; }
     void setOutlineCoarseness(float value) { _outlineCoarseness = value; }
-    void setOutlineRules(const QVector<QPair<QString, float>>& rules) { _outlineRules = rules; }
+    void setOutlineRules(const QVector<OutlineRule>& rules) { _outlineRules = rules; }
+    void setOutlineCenteredOverride(bool centered)
+    {
+        _hasOutlineCenteredOverride = true;
+        _outlineCenteredOverride = centered;
+    }
 
     bool generate(SpriteAtlasGenerateProgress* progress = nullptr);
     void abortGeneration() { _aborted = true; }
@@ -105,7 +112,9 @@ private:
     int _extrude;
     QVector<QPair<QString, int>> _extrudeRules;
     float _outlineCoarseness;
-    QVector<QPair<QString, float>> _outlineRules;
+    QVector<OutlineRule> _outlineRules;
+    bool _hasOutlineCenteredOverride;
+    bool _outlineCenteredOverride;
     bool _heuristicMask;
     bool _pow2;
     bool _forceSquared;
@@ -124,6 +133,7 @@ private:
     QVector<OutputData> _outputData;
     QMap<QString, QVector<QString>> _identicalFrames;
     QMap<QString, QVector<QPoint>> _outlines;
+    QMap<QString, bool> _outlineCentered;
 
     bool _aborted;
 };

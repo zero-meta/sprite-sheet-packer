@@ -69,12 +69,18 @@ QJsonObject sizeJson(const QSize& size, bool shortNames = false)
     };
 }
 
-QJsonArray outlineJson(const QVector<QPoint>& outline)
+QJsonArray outlineJson(const SpriteFrameInfo& frame)
 {
     QJsonArray result;
-    for (const QPoint& point : outline) {
-        result.append(point.x());
-        result.append(point.y());
+    const double offsetX = frame.outlineCentered
+                         ? frame.sourceColorRect.width() * 0.5
+                         : 0.0;
+    const double offsetY = frame.outlineCentered
+                         ? frame.sourceColorRect.height() * 0.5
+                         : 0.0;
+    for (const QPoint& point : frame.outline) {
+        result.append(point.x() - offsetX);
+        result.append(point.y() - offsetY);
     }
     return result;
 }
@@ -130,7 +136,7 @@ bool exportCorona(const QMap<QString, SpriteFrameInfo>& frames,
             {"name", name}
         };
         if (frame.rotated) value.insert("rotated", true);
-        if (!frame.outline.isEmpty()) value.insert("outline", outlineJson(frame.outline));
+        if (!frame.outline.isEmpty()) value.insert("outline", outlineJson(frame));
         jsonFrames.append(value);
         frameIndex.insert(name, index++);
     }

@@ -69,7 +69,8 @@ bool SpritePackerProjectFile::read(const QString &fileName) {
     for (const QJsonValue& value : outlineRules) {
         const QJsonObject rule = value.toObject();
         _outlineRules.append({rule["pattern"].toString(),
-                              static_cast<float>(rule["coarseness"].toDouble(-1.0))});
+                              static_cast<float>(rule["coarseness"].toDouble(-1.0)),
+                              rule["centered"].toBool(false)});
     }
     if (json.contains("imageFormat")) _imageFormat = imageFormatFromString(json["imageFormat"].toString());
     if (json.contains("pixelFormat")) _pixelFormat = pixelFormatFromString(json["pixelFormat"].toString());
@@ -147,8 +148,9 @@ bool SpritePackerProjectFile::write(const QString &fileName) {
     QJsonArray outlineRules;
     for (const auto& rule : _outlineRules) {
         outlineRules.append(QJsonObject{
-            {"pattern", rule.first},
-            {"coarseness", rule.second}
+            {"pattern", rule.pattern},
+            {"coarseness", rule.coarseness},
+            {"centered", rule.centered}
         });
     }
     json["outlineRules"] = outlineRules;

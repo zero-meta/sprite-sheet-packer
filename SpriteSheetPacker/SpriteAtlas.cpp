@@ -178,6 +178,8 @@ SpriteAtlas::SpriteAtlas(const QStringList& sourceList, int textureBorder, int s
     , _spriteBorder(spriteBorder)
     , _extrude(0)
     , _outlineCoarseness(0.0f)
+    , _hasOutlineCenteredOverride(false)
+    , _outlineCenteredOverride(false)
     , _heuristicMask(heuristicMask)
     , _pow2(pow2)
     , _forceSquared(forceSquared)
@@ -204,6 +206,7 @@ bool SpriteAtlas::generate(SpriteAtlasGenerateProgress* progress) {
 
     _outputData.clear();
     _outlines.clear();
+    _outlineCentered.clear();
 
     _progress = progress;
 
@@ -215,10 +218,17 @@ bool SpriteAtlas::generate(SpriteAtlasGenerateProgress* progress) {
     for (const auto& rule : _extrudeRules) {
         extrudeRules.append({globExpression(rule.first), rule.second});
     }
-    QVector<QPair<QRegularExpression, float>> outlineRules;
+    struct CompiledOutlineRule {
+        QRegularExpression pattern;
+        float coarseness;
+        bool centered;
+    };
+    QVector<CompiledOutlineRule> outlineRules;
     outlineRules.reserve(_outlineRules.size());
     for (const auto& rule : _outlineRules) {
-        outlineRules.append({globExpression(rule.first), rule.second});
+        outlineRules.append({globExpression(rule.pattern),
+                             rule.coarseness,
+                             rule.centered});
     }
 
     QStringList nameFilter;
@@ -258,6 +268,7 @@ bool SpriteAtlas::generate(SpriteAtlasGenerateProgress* progress) {
     QVector<PackContent> inputContent;
     QSet<QString> sourceNames;
     QMap<QString, float> outlineRequests;
+    QMap<QString, bool> outlineCenteredRequests;
     auto it_f = fileList.begin();
     for(; it_f != fileList.end(); ++it_f, ++progressIndex) {
         if (_aborted) return false;
@@ -292,11 +303,21 @@ bool SpriteAtlas::generate(SpriteAtlasGenerateProgress* progress) {
         qDebug() << "extrude:" << packContent.name() << extrusion;
 
         float outlineCoarseness = _outlineCoarseness;
+        bool outlineCentered = false;
         for (const auto& rule : outlineRules) {
-            if (rule.first.match(rulePath).hasMatch()) outlineCoarseness = rule.second;
+            if (rule.pattern.match(rulePath).hasMatch()) {
+                outlineCoarseness = rule.coarseness;
+                outlineCentered = rule.centered;
+            }
+        }
+        if (_hasOutlineCenteredOverride) {
+            outlineCentered = _outlineCenteredOverride;
         }
         outlineRequests.insert(packContent.name(), outlineCoarseness);
-        qDebug() << "outline coarseness:" << packContent.name() << outlineCoarseness;
+        outlineCenteredRequests.insert(packContent.name(), outlineCentered);
+        qDebug() << "outline:" << packContent.name()
+                 << "coarseness" << outlineCoarseness
+                 << "centered" << outlineCentered;
 
         // Trim / Crop
         if (_trim) {
@@ -364,6 +385,7 @@ bool SpriteAtlas::generate(SpriteAtlasGenerateProgress* progress) {
             }
             if (outline->size() >= 3) {
                 _outlines.insert(name, *outline);
+                _outlineCentered.insert(name, outlineCenteredRequests.value(name, false));
             } else {
                 qDebug() << "outline omitted (fewer than 3 points):" << name;
             }
@@ -663,6 +685,7 @@ bool SpriteAtlas::packWithRect(const QVector<PackContent>& content) {
         spriteFrame.sourceColorRect = packContent.rect();
         spriteFrame.sourceSize = packContent.image().size();
         spriteFrame.outline = _outlines.value(packContent.name());
+        spriteFrame.outlineCentered = _outlineCentered.value(packContent.name(), false);
         painter.drawImage(outerPosition, imageWithExtrusion);
 
         outputData._spriteFrames[packContent.name()] = spriteFrame;
@@ -674,6 +697,7 @@ bool SpriteAtlas::packWithRect(const QVector<PackContent>& content) {
             for (auto ident: (*identicalIt)) {
                 SpriteFrameInfo identicalFrame = spriteFrame;
                 identicalFrame.outline = _outlines.value(ident);
+                identicalFrame.outlineCentered = _outlineCentered.value(ident, false);
                 outputData._spriteFrames[ident] = identicalFrame;
 
                 identicalList.push_back(ident);
@@ -742,6 +766,7 @@ bool SpriteAtlas::packWithPolygon(const QVector<PackContent>& content) {
         spriteFrame.sourceColorRect = packContent.rect();
         spriteFrame.sourceSize = packContent.image().size();
         spriteFrame.outline = _outlines.value(packContent.name());
+        spriteFrame.outlineCentered = _outlineCentered.value(packContent.name(), false);
 
         QPainterPath clipPath;
         for (const auto& polygon: packContent.polygons()) {
@@ -763,6 +788,7 @@ bool SpriteAtlas::packWithPolygon(const QVector<PackContent>& content) {
             for (auto ident: (*identicalIt)) {
                 SpriteFrameInfo identicalFrame = spriteFrame;
                 identicalFrame.outline = _outlines.value(ident);
+                identicalFrame.outlineCentered = _outlineCentered.value(ident, false);
                 outputData._spriteFrames[ident] = identicalFrame;
 
                 identicalList.push_back(ident);

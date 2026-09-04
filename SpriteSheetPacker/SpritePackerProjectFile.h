@@ -3,6 +3,7 @@
 
 #include <QtCore>
 #include "ImageFormat.h"
+#include "OutlineRule.h"
 #include "TextureScaleVariant.h"
 
 struct ScalingVariant{
@@ -50,8 +51,8 @@ public:
 
     void setOutlineCoarseness(float value) { _outlineCoarseness = value; }
     float outlineCoarseness() const { return _outlineCoarseness; }
-    void setOutlineRules(const QVector<QPair<QString, float>>& rules) { _outlineRules = rules; }
-    const QVector<QPair<QString, float>>& outlineRules() const { return _outlineRules; }
+    void setOutlineRules(const QVector<OutlineRule>& rules) { _outlineRules = rules; }
+    const QVector<OutlineRule>& outlineRules() const { return _outlineRules; }
 
     void setImageFormat(ImageFormat imageFormat) { _imageFormat = imageFormat; }
     ImageFormat imageFormat() const { return _imageFormat; }
@@ -119,7 +120,7 @@ protected:
     int         _extrude;
     QVector<QPair<QString, int>> _extrudeRules;
     float       _outlineCoarseness;
-    QVector<QPair<QString, float>> _outlineRules;
+    QVector<OutlineRule> _outlineRules;
     ImageFormat _imageFormat;
     PixelFormat _pixelFormat;
     bool        _premultiplied;

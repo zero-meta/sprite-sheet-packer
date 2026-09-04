@@ -274,7 +274,8 @@ file(WRITE "${OUTPUT}/smoke.ssp" "{
   ],
   \"outlineCoarseness\": 0,
   \"outlineRules\": [
-    {\"pattern\": \"nested/**\", \"coarseness\": 2}
+    {\"pattern\": \"icon-addFolder.png\", \"coarseness\": 2},
+    {\"pattern\": \"nested/**\", \"coarseness\": 2, \"centered\": true}
   ],
   \"pngOptMode\": \"Lossy\",
   \"pngQuantQuality\": \"80-95\",
@@ -425,16 +426,138 @@ string(JSON mixed_file_outline ERROR_VARIABLE mixed_file_outline_error
     GET "${mixed_corona2_json}" sheet frames ${mixed_file_frame} outline)
 string(JSON mixed_directory_outline ERROR_VARIABLE mixed_directory_outline_error
     GET "${mixed_corona2_json}" sheet frames ${mixed_directory_frame} outline)
-if(mixed_file_outline_error STREQUAL "NOTFOUND")
-    message(FATAL_ERROR "outlineRules unexpectedly generated an outline for the unmatched file")
+if(NOT mixed_file_outline_error STREQUAL "NOTFOUND")
+    message(FATAL_ERROR "outlineRules did not generate the uncentered comparison outline")
 endif()
 if(NOT mixed_directory_outline_error STREQUAL "NOTFOUND")
     message(FATAL_ERROR "outlineRules did not generate an outline for the matched directory frame")
 endif()
+string(JSON mixed_file_outline_length LENGTH "${mixed_file_outline}")
 string(JSON mixed_directory_outline_length LENGTH "${mixed_directory_outline}")
 math(EXPR mixed_directory_outline_remainder "${mixed_directory_outline_length} % 2")
-if(mixed_directory_outline_length LESS 6 OR NOT mixed_directory_outline_remainder EQUAL 0)
+if(NOT mixed_file_outline_length EQUAL mixed_directory_outline_length
+   OR mixed_directory_outline_length LESS 6
+   OR NOT mixed_directory_outline_remainder EQUAL 0)
     message(FATAL_ERROR "Generated outline does not contain at least three coordinate pairs")
+endif()
+string(JSON centered_frame_width GET "${mixed_corona2_json}"
+    sheet frames ${mixed_directory_frame} width)
+string(JSON centered_frame_height GET "${mixed_corona2_json}"
+    sheet frames ${mixed_directory_frame} height)
+math(EXPR centered_offset_x "${centered_frame_width} / 2")
+math(EXPR centered_offset_y "${centered_frame_height} / 2")
+math(EXPR mixed_outline_last "${mixed_directory_outline_length} - 1")
+foreach(coordinate_index RANGE 0 ${mixed_outline_last})
+    string(JSON uncentered_coordinate GET "${mixed_file_outline}" ${coordinate_index})
+    string(JSON centered_coordinate GET "${mixed_directory_outline}" ${coordinate_index})
+    math(EXPR coordinate_axis "${coordinate_index} % 2")
+    if(coordinate_axis EQUAL 0)
+        math(EXPR expected_centered_coordinate "${uncentered_coordinate} - ${centered_offset_x}")
+    else()
+        math(EXPR expected_centered_coordinate "${uncentered_coordinate} - ${centered_offset_y}")
+    endif()
+    if(NOT centered_coordinate EQUAL expected_centered_coordinate)
+        message(FATAL_ERROR "centered outline was not offset from the trimmed frame center")
+    endif()
+endforeach()
+
+get_filename_component(resource_directory "${INPUT}" DIRECTORY)
+file(TO_CMAKE_PATH "${resource_directory}/icon-lock.png" odd_outline_input)
+file(TO_CMAKE_PATH "${OUTPUT}/centered-outline-output" centered_outline_output)
+file(WRITE "${OUTPUT}/centered-outline.ssp" "{
+  \"trimMode\": \"Rect\",
+  \"algorithm\": \"Rect\",
+  \"imageFormat\": \"*.png\",
+  \"dataFormat\": \"corona2\",
+  \"destPath\": \"${centered_outline_output}\",
+  \"spriteSheetName\": \"centered-outline\",
+  \"srcList\": [\"${odd_outline_input}\"],
+  \"outlineRules\": [
+    {\"pattern\": \"icon-lock.png\", \"coarseness\": 2, \"centered\": true}
+  ]
+}")
+execute_process(
+    COMMAND "${CLI}" "${OUTPUT}/centered-outline.ssp"
+    RESULT_VARIABLE result
+    OUTPUT_VARIABLE stdout
+    ERROR_VARIABLE stderr
+)
+if(NOT result EQUAL 0)
+    message(FATAL_ERROR "Odd-sized centered outline export failed (${result}):\n${stdout}\n${stderr}")
+endif()
+file(READ "${OUTPUT}/centered-outline-output/centered-outline.json" odd_outline_json)
+string(JSON odd_outline_index GET "${odd_outline_json}" frameIndex "icon-lock")
+math(EXPR odd_outline_frame "${odd_outline_index} - 1")
+string(JSON odd_outline GET "${odd_outline_json}" sheet frames ${odd_outline_frame} outline)
+string(JSON odd_outline_length LENGTH "${odd_outline}")
+math(EXPR odd_outline_last "${odd_outline_length} - 1")
+set(found_half_pixel false)
+foreach(coordinate_index RANGE 0 ${odd_outline_last})
+    string(JSON centered_coordinate GET "${odd_outline}" ${coordinate_index})
+    if(centered_coordinate MATCHES "\\.5$")
+        set(found_half_pixel true)
+        break()
+    endif()
+endforeach()
+if(NOT found_half_pixel)
+    message(FATAL_ERROR "Centered outline for an odd-sized frame did not preserve half-pixel coordinates")
+endif()
+
+execute_process(
+    COMMAND "${CLI}" "${odd_outline_input}" "${OUTPUT}/cli-centered-outline"
+        --format corona2
+        --output-name cli-centered-outline
+        --outline-coarseness 2
+        --outline-origin center
+    RESULT_VARIABLE result
+    OUTPUT_VARIABLE stdout
+    ERROR_VARIABLE stderr
+)
+if(NOT result EQUAL 0)
+    message(FATAL_ERROR "CLI centered outline export failed (${result}):\n${stdout}\n${stderr}")
+endif()
+file(READ "${OUTPUT}/cli-centered-outline/cli-centered-outline.json" cli_centered_json)
+string(JSON cli_centered_index GET "${cli_centered_json}" frameIndex "icon-lock")
+math(EXPR cli_centered_frame "${cli_centered_index} - 1")
+string(JSON cli_centered_outline GET "${cli_centered_json}"
+    sheet frames ${cli_centered_frame} outline)
+if(NOT cli_centered_outline STREQUAL odd_outline)
+    message(FATAL_ERROR "--outline-origin center did not match centered project output")
+endif()
+
+execute_process(
+    COMMAND "${CLI}" "${OUTPUT}/centered-outline.ssp" "${OUTPUT}/top-left-outline"
+        --outline-origin top-left
+    RESULT_VARIABLE result
+    OUTPUT_VARIABLE stdout
+    ERROR_VARIABLE stderr
+)
+if(NOT result EQUAL 0)
+    message(FATAL_ERROR "CLI top-left outline override failed (${result}):\n${stdout}\n${stderr}")
+endif()
+file(READ "${OUTPUT}/top-left-outline/centered-outline.json" top_left_json)
+string(JSON top_left_index GET "${top_left_json}" frameIndex "icon-lock")
+math(EXPR top_left_frame "${top_left_index} - 1")
+string(JSON top_left_outline GET "${top_left_json}" sheet frames ${top_left_frame} outline)
+string(JSON top_left_outline_length LENGTH "${top_left_outline}")
+math(EXPR top_left_outline_last "${top_left_outline_length} - 1")
+foreach(coordinate_index RANGE 0 ${top_left_outline_last})
+    string(JSON top_left_coordinate GET "${top_left_outline}" ${coordinate_index})
+    if(top_left_coordinate LESS 0 OR top_left_coordinate MATCHES "\\.5$")
+        message(FATAL_ERROR "--outline-origin top-left did not override centered project rules")
+    endif()
+endforeach()
+
+execute_process(
+    COMMAND "${CLI}" "${odd_outline_input}" "${OUTPUT}/invalid-outline-origin"
+        --outline-coarseness 2
+        --outline-origin middle
+    RESULT_VARIABLE result
+    OUTPUT_VARIABLE stdout
+    ERROR_VARIABLE stderr
+)
+if(result EQUAL 0 OR NOT stderr MATCHES "must be center or top-left")
+    message(FATAL_ERROR "Invalid --outline-origin value was not rejected")
 endif()
 
 execute_process(

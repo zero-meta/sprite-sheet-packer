@@ -137,7 +137,11 @@ for selected frames. Set a global simplification distance with
   "outlineCoarseness": 0,
   "outlineRules": [
     {"pattern": "scene_build/material/**", "coarseness": 3},
-    {"pattern": "scene_build/skins/textures/**", "coarseness": 3}
+    {
+      "pattern": "scene_build/skins/textures/**",
+      "coarseness": 3,
+      "centered": true
+    }
   ]
 }
 ```
@@ -147,9 +151,26 @@ behavior as `extrudeRules`. A coarseness of `0` disables generation. An
 explicit `--outline-coarseness N`, including `0`, replaces all project rules.
 The exported flat `outline` array contains `x, y` pairs relative to the
 trimmed, unrotated frame; extrusion and atlas placement do not change these
-coordinates. Alpha values greater than zero are solid. As with Solar2D's
-outline generator, only the first connected opaque region is traced and holes
-are ignored. Outlines are regenerated after each scaling variant is applied.
+coordinates. Set a rule's optional `centered` field to `true` to subtract half
+of that frame's width and height, placing `(0, 0)` at its center. Odd frame
+dimensions therefore produce half-pixel coordinates. The default is `false`,
+and the last matching rule determines both `coarseness` and `centered`. Alpha
+values greater than zero are solid. As with Solar2D's outline generator, only
+the first connected opaque region is traced and holes are ignored. Outlines
+are regenerated after each scaling variant is applied.
+
+For direct input, or to override every matching project rule, set the origin
+explicitly on the command line:
+
+```sh
+build/sprite-sheet-packer path/to/sprites path/to/output \
+  --format corona2 \
+  --outline-coarseness 3 \
+  --outline-origin center
+```
+
+`--outline-origin top-left` forces the original uncentered coordinates. When
+the option is omitted, each project rule's `centered` value is used.
 
 Use pngquant as an optional lossy post-process when a smaller distribution
 file is more important than exact source pixels:

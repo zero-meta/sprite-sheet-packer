@@ -25,7 +25,9 @@ struct PackOptions {
     int extrude = 0;
     QVector<QPair<QString, int>> extrudeRules;
     float outlineCoarseness = 0.0f;
-    QVector<QPair<QString, float>> outlineRules;
+    QVector<OutlineRule> outlineRules;
+    bool hasOutlineCenteredOverride = false;
+    bool outlineCenteredOverride = false;
     bool heuristicMask = false;
     bool rotateSprites = false;
     bool powerOfTwo = false;
@@ -247,16 +249,28 @@ bool applyOverrides(const QCommandLineParser& parser, PackOptions* options, QStr
         return false;
     }
     for (const auto& rule : options->outlineRules) {
-        if (rule.first.trimmed().isEmpty()
-            || !qIsFinite(rule.second)
-            || rule.second < 0.0f
-            || (rule.second > 0.0f && rule.second < 1.0f)
-            || rule.second > 4096.0f) {
+        if (rule.pattern.trimmed().isEmpty()
+            || !qIsFinite(rule.coarseness)
+            || rule.coarseness < 0.0f
+            || (rule.coarseness > 0.0f && rule.coarseness < 1.0f)
+            || rule.coarseness > 4096.0f) {
             *error = "Project outlineRules require a non-empty pattern and coarseness of 0 or from 1 to 4096.";
             return false;
         }
     }
     if (parser.isSet("outline-coarseness")) options->outlineRules.clear();
+    if (parser.isSet("outline-origin")) {
+        const QString origin = parser.value("outline-origin").toLower();
+        if (origin == "center") {
+            options->outlineCenteredOverride = true;
+        } else if (origin == "top-left") {
+            options->outlineCenteredOverride = false;
+        } else {
+            *error = "--outline-origin must be center or top-left.";
+            return false;
+        }
+        options->hasOutlineCenteredOverride = true;
+    }
 
     if (parser.isSet("power-of-two")) options->powerOfTwo = true;
     if (parser.isSet("force-squared")) options->forceSquared = true;
@@ -387,6 +401,9 @@ bool addAtlas(PublishSpriteSheet* publisher,
     atlas.setExtrudeRules(options.extrudeRules);
     atlas.setOutlineCoarseness(options.outlineCoarseness);
     atlas.setOutlineRules(options.outlineRules);
+    if (options.hasOutlineCenteredOverride) {
+        atlas.setOutlineCenteredOverride(options.outlineCenteredOverride);
+    }
     atlas.setRotateSprites(options.rotateSprites);
     atlas.setAlgorithm(options.algorithm);
     if (options.trimMode == "Polygon") {
@@ -423,6 +440,7 @@ int commandLine(QCoreApplication& app)
         {"sprite-border", "Spacing between sprites.", "pixels", "2"},
         {"extrude", "Duplicate sprite edge pixels outward by this amount.", "pixels", "0"},
         {"outline-coarseness", "Generate Corona outline points; 0 disables it.", "pixels", "0"},
+        {"outline-origin", "Outline coordinate origin: center or top-left.", "origin"},
         {{"power-of-two", "powerOf2"}, "Force power-of-two sheet dimensions."},
         {"force-squared", "Force square sheet dimensions."},
         {"heuristic-mask", "Derive transparency from the image corner color."},
